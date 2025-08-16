@@ -8,6 +8,7 @@ from app.services.processor import (
     process_pdf_docx, process_image, process_web_url, 
     download_youtube_video, process_audio_video, save_temp_file, save_content_to_file
 )
+from app.services.vector_service import vector_service
 from app.config import settings, current_date_time
 import traceback
 
@@ -60,11 +61,14 @@ def delete_session(db: Session, session_id: str):
         
         documents = db.query(Document).filter(Document.session_id == session_id).all()
         for doc in documents:
+            # Clean up files and embeddings
             if doc.content_file_path and os.path.exists(doc.content_file_path):
                 try:
                     os.remove(doc.content_file_path)
                 except:
                     pass
+            
+            # Delete document chunks (embeddings) - handled by CASCADE
         
         db.query(Document).filter(Document.session_id == session_id).delete()
         db.delete(session)
@@ -75,7 +79,7 @@ def delete_session(db: Session, session_id: str):
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-def parse_document(db: Session, file: UploadFile, session_id: str = None) -> Document:
+def parse_document(db: Session, file: UploadFile, session_id: str = None, create_embeddings: bool = True) -> Document:
     allowed_types = {
         'application/pdf': 'pdf',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
@@ -109,7 +113,7 @@ def parse_document(db: Session, file: UploadFile, session_id: str = None) -> Doc
             source_type="upload",
             content_file_path=content_file_path,
             file_size=file.size,
-            processing_status="completed",
+            processing_status="processing" if create_embeddings else "completed",
             text_length=len(raw_text),
             session_id=session_id
         )
@@ -117,6 +121,19 @@ def parse_document(db: Session, file: UploadFile, session_id: str = None) -> Doc
         db.add(document)
         db.commit()
         db.refresh(document)
+        
+        # Create embeddings if requested
+        if create_embeddings:
+            try:
+                chunks = vector_service.chunk_and_embed_document(db, document_id, raw_text)
+                document.processing_status = "completed"
+                db.commit()
+                print(f"Created {len(chunks)} chunks with embeddings for document {document_id}")
+            except Exception as e:
+                print(f"Warning: Failed to create embeddings: {e}")
+                # Document is still usable without embeddings
+                document.processing_status = "completed_no_embeddings"
+                db.commit()
         
         return document
         
@@ -130,7 +147,7 @@ def parse_document(db: Session, file: UploadFile, session_id: str = None) -> Doc
         if temp_file_path and os.path.exists(temp_file_path):
             os.remove(temp_file_path)
 
-def parse_audio_video(db: Session, file: UploadFile, session_id: str = None) -> Document:
+def parse_audio_video(db: Session, file: UploadFile, session_id: str = None, create_embeddings: bool = True) -> Document:
     allowed_types = {
         'audio/mpeg': 'audio', 'audio/wav': 'audio', 'audio/mp3': 'audio',
         'video/mp4': 'video', 'video/avi': 'video', 'video/quicktime': 'video',
@@ -156,7 +173,7 @@ def parse_audio_video(db: Session, file: UploadFile, session_id: str = None) -> 
             source_type="upload",
             content_file_path=content_file_path,
             file_size=file.size,
-            processing_status="completed",
+            processing_status="processing" if create_embeddings else "completed",
             text_length=len(raw_text),
             session_id=session_id
         )
@@ -164,7 +181,19 @@ def parse_audio_video(db: Session, file: UploadFile, session_id: str = None) -> 
         db.add(document)
         db.commit()
         db.refresh(document)
-                
+        
+        # Create embeddings if requested
+        if create_embeddings:
+            try:
+                chunks = vector_service.chunk_and_embed_document(db, document_id, raw_text)
+                document.processing_status = "completed"
+                db.commit()
+                print(f"Created {len(chunks)} chunks with embeddings for document {document_id}")
+            except Exception as e:
+                print(f"Warning: Failed to create embeddings: {e}")
+                document.processing_status = "completed_no_embeddings"
+                db.commit()
+        
         return document
         
     except Exception as e:
@@ -177,7 +206,7 @@ def parse_audio_video(db: Session, file: UploadFile, session_id: str = None) -> 
         if temp_file_path and os.path.exists(temp_file_path):
             os.remove(temp_file_path)
 
-def parse_web_url(db: Session, url: str, session_id: str = None) -> Document:
+def parse_web_url(db: Session, url: str, session_id: str = None, create_embeddings: bool = True) -> Document:
     document_id = str(uuid.uuid4())
     
     try:
@@ -190,7 +219,7 @@ def parse_web_url(db: Session, url: str, session_id: str = None) -> Document:
             file_type="web",
             source_type="url",
             content_file_path=content_file_path,
-            processing_status="completed",
+            processing_status="processing" if create_embeddings else "completed",
             text_length=len(raw_text),
             session_id=session_id
         )
@@ -198,7 +227,19 @@ def parse_web_url(db: Session, url: str, session_id: str = None) -> Document:
         db.add(document)
         db.commit()
         db.refresh(document)
-                
+        
+        # Create embeddings if requested
+        if create_embeddings:
+            try:
+                chunks = vector_service.chunk_and_embed_document(db, document_id, raw_text)
+                document.processing_status = "completed"
+                db.commit()
+                print(f"Created {len(chunks)} chunks with embeddings for document {document_id}")
+            except Exception as e:
+                print(f"Warning: Failed to create embeddings: {e}")
+                document.processing_status = "completed_no_embeddings"
+                db.commit()
+        
         return document
         
     except Exception as e:
@@ -206,7 +247,7 @@ def parse_web_url(db: Session, url: str, session_id: str = None) -> Document:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-def parse_youtube(db: Session, url: str, session_id: str = None) -> Document:
+def parse_youtube(db: Session, url: str, session_id: str = None, create_embeddings: bool = True) -> Document:
     document_id = str(uuid.uuid4())
     audio_path = None
     
@@ -221,7 +262,7 @@ def parse_youtube(db: Session, url: str, session_id: str = None) -> Document:
             file_type="youtube",
             source_type="youtube",
             content_file_path=content_file_path,
-            processing_status="completed",
+            processing_status="processing" if create_embeddings else "completed",
             text_length=len(raw_text),
             session_id=session_id
         )
@@ -229,6 +270,18 @@ def parse_youtube(db: Session, url: str, session_id: str = None) -> Document:
         db.add(document)
         db.commit()
         db.refresh(document)
+        
+        # Create embeddings if requested
+        if create_embeddings:
+            try:
+                chunks = vector_service.chunk_and_embed_document(db, document_id, raw_text)
+                document.processing_status = "completed"
+                db.commit()
+                print(f"Created {len(chunks)} chunks with embeddings for document {document_id}")
+            except Exception as e:
+                print(f"Warning: Failed to create embeddings: {e}")
+                document.processing_status = "completed_no_embeddings"
+                db.commit()
         
         return document
         
@@ -257,4 +310,41 @@ def get_documents(db: Session):
     return db.query(Document).all()
 
 def get_documents_by_session(db: Session, session_id: str):
-    return db.query(Document).filter(Document.session_id == session_id).all()   
+    return db.query(Document).filter(Document.session_id == session_id).all()
+
+def reprocess_document_embeddings(db: Session, document_id: str, target_chunks: int = 10):
+    """Reprocess embeddings for an existing document"""
+    try:
+        document = get_document(db, document_id)
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        if not document.content_file_path or not os.path.exists(document.content_file_path):
+            raise HTTPException(status_code=404, detail="Document content file not found")
+        
+        with open(document.content_file_path, 'r', encoding='utf-8') as f:
+            text_content = f.read()
+        
+        # Update processing status
+        document.processing_status = "processing"
+        db.commit()
+        
+        # Create new embeddings (this will delete old ones first)
+        chunks = vector_service.update_document_embeddings(db, document_id, target_chunks)
+        
+        # Update status
+        document.processing_status = "completed"
+        db.commit()
+        
+        return {
+            "document_id": document_id,
+            "chunks_created": len(chunks),
+            "status": "completed"
+        }
+        
+    except Exception as e:
+        if document:
+            document.processing_status = "error"
+            db.commit()
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
