@@ -2,8 +2,6 @@ import uuid
 from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException, UploadFile
 from app.models import Question, QuestionAnswer, Flashcard
-from app.services import document_service, summarize_service
-import traceback
 import logging
 from app.config import current_date_time
 

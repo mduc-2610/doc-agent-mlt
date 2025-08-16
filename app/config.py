@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     # API Keys
     llama_cloud_api_key: str = os.getenv("LLAMA_CLOUD_API_KEY")
     openai_api_key: str = os.getenv("OPENAI_API_KEY")
+    hf_api_key: str = os.getenv("HF_API_KEY", "")
     
     # File storage
     content_files_dir: str = "content_files"
@@ -67,31 +68,3 @@ settings = Settings()
 
 def current_date_time():
     return datetime.now(timezone.utc)
-
-# Logging configuration
-
-# Validation
-def validate_config():
-    """Validate configuration settings"""
-    errors = []
-    
-    if not settings.database_url:
-        errors.append("DATABASE_URL is required")
-    
-    if not settings.openai_api_key:
-        errors.append("OPENAI_API_KEY is required")
-    
-    if settings.embedding_dimension not in [384, 512, 768, 1024, 1536]:
-        errors.append(f"EMBEDDING_DIMENSION {settings.embedding_dimension} is not supported")
-    
-    if settings.vector_similarity_threshold < 0 or settings.vector_similarity_threshold > 1:
-        errors.append("VECTOR_SIMILARITY_THRESHOLD must be between 0 and 1")
-    
-    if settings.min_quality_score < 0 or settings.min_quality_score > 1:
-        errors.append("MIN_QUALITY_SCORE must be between 0 and 1")
-    
-    if errors:
-        raise ValueError("Configuration errors: " + "; ".join(errors))
-
-# Validate on import
-validate_config()

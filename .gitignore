@@ -3,3 +3,5 @@
 **/.env
 /content_files
 app.log
+**/test_syntax.py
+**/note.txt

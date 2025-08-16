@@ -43,8 +43,7 @@ class DocumentChunk(Base):
     chunk_index = Column(Integer, nullable=False)
     content = Column(Text, nullable=False)
     word_count = Column(Integer, nullable=False)
-    # Vector embedding column for pgvector
-    embedding = Column(Vector(1024))  # BGE-large-v1.5 produces 1024-dimensional vectors
+    embedding = Column(Vector(1024))  
     extra_metadata = Column(JSON)
     created_at = Column(DateTime, default=current_date_time)
     
@@ -56,9 +55,6 @@ class DocumentSummary(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     document_id = Column(UUID(as_uuid=True), nullable=False)
     original_word_count = Column(Integer, nullable=False)
-    num_chunks = Column(Integer, nullable=False)
-    chunk_summaries = Column(JSON, nullable=False)
-    global_summary = Column(Text, nullable=False)
     created_at = Column(DateTime, default=current_date_time)
 
 class Question(Base):

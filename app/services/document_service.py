@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, UploadFile
 from app.models import Document, Session as SessionModel
-from app.services.processor import (
+from app.services.parse_service import (
     process_pdf_docx, process_image, process_web_url, 
     download_youtube_video, process_audio_video, save_temp_file, save_content_to_file
 )

@@ -10,7 +10,7 @@ import uuid
 from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException, UploadFile
 from app.models import Question, QuestionAnswer, Flashcard, QuestionGeneration
-from app.services import document_service, summarize_service
+from app.services import document_service
 from app.services.vector_service import vector_service
 import traceback
 import logging
@@ -67,7 +67,7 @@ class FlashcardValidator(BaseModel):
     answer: str
     explanation: str
 
-class EnhancedQuizGenerationService:
+class QuizGenerationService:
     def __init__(self):
         self.client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
@@ -144,7 +144,8 @@ class EnhancedQuizGenerationService:
                 if q.get("type") == "multiple_choice" and q.get("options"):
                     for opt in q.get("options", []):
                         is_correct = (opt == q.get("correct_answer"))
-                        explanation = q.get("explanation", "") if is_correct else self._generate_incorrect_explanation(opt, q.get("correct_answer"), context)
+                        explanation = q.get("explanation", "")
+                        # if is_correct else self._generate_incorrect_explanation(opt, q.get("correct_answer"), context)
                         incorrect_answers.append(QuizAnswer(
                             content=opt,
                             is_correct=is_correct,
@@ -237,7 +238,7 @@ class EnhancedQuizGenerationService:
         return min(score, 1.0)
 
 # Enhanced generation service
-enhanced_ai_generator = EnhancedQuizGenerationService()
+enhanced_ai_generator = QuizGenerationService()
 
 def process_rag_quiz_and_flashcards(
     topic: str,
