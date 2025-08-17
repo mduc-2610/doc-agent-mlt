@@ -1,0 +1,96 @@
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+
+from typing import Optional, List
+from datetime import datetime
+import uuid
+
+
+class FlashcardResponse(BaseModel):
+    id: uuid.UUID
+    card_type: str
+    question: str
+    answer: str
+    explanation: Optional[str] = None
+    topic: Optional[str] = None
+    source_context: Optional[str] = None
+    generation_model: Optional[str] = None
+    validation_score: Optional[float] = None
+    human_validated: bool = False
+    document_id: Optional[uuid.UUID] = None
+    session_id: Optional[uuid.UUID] = None
+    user_id: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class QuestionAnswerResponse(BaseModel):
+    id: uuid.UUID
+    content: str
+    is_correct: bool = False
+    explanation: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class QuestionResponse(BaseModel):
+    id: uuid.UUID
+    content: str
+    type: str
+    difficulty_level: Optional[str] = None
+    topic: Optional[str] = None
+    correct_answer: str
+    explanation: Optional[str] = None
+    source_context: Optional[str] = None
+    generation_model: Optional[str] = None
+    validation_score: Optional[float] = None
+    human_validated: bool = False
+    document_id: Optional[uuid.UUID] = None
+    session_id: Optional[uuid.UUID] = None
+    user_id: str
+    created_at: datetime
+    question_answers: List[QuestionAnswerResponse] = []
+
+    class Config:
+        from_attributes = True
+
+
+class DocumentUploadBase(BaseModel):
+    user_id: str
+    session_id: Optional[str] = None
+    question_count: int = 15
+    flashcard_count: int = 15
+
+
+class DocumentFileUploadRequest(DocumentUploadBase):
+    file: UploadFile = File(...)
+
+class DocumentUrlUploadRequest(DocumentUploadBase):
+    url: str
+    
+class TopicGenerationRequest(BaseModel):
+    topic: str
+    document_ids: List[str]
+    session_id: Optional[str] = None
+    user_id: str
+    quiz_count: int = 15
+    flashcard_count: int = 15
+
+class ReviewRequest(BaseModel):
+    generation_id: str
+    action: str  # "approve", "reject", "approve_selected"
+    selected_question_ids: Optional[List[str]] = None
+    reviewer_notes: Optional[str] = None
+
+
+class DocumentGenerationRequest(BaseModel):
+    topic: str = "General content analysis"
+    document_ids: List[str]
+    session_id: Optional[str] = None
+    user_id: str
+    quiz_count: int = 15
+    flashcard_count: int = 15

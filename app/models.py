@@ -57,7 +57,7 @@ class DocumentSummary(Base):
     original_word_count = Column(Integer, nullable=False)
     created_at = Column(DateTime, default=current_date_time)
 
-class Question(Base):
+class QuestionGen(Base):
     __tablename__ = "questions"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -78,7 +78,7 @@ class Question(Base):
 
     question_answers = relationship("QuestionAnswer", back_populates="question", cascade="all, delete-orphan")
 
-class QuestionAnswer(Base):
+class QuestionAnswerGen(Base):
     __tablename__ = "question_answers"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

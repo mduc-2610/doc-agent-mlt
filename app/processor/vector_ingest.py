@@ -4,7 +4,7 @@ from sentence_transformers import SentenceTransformer
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.models import DocumentChunk, Document
-from app.services.text_processor import chunk_service
+from app.processor.chunk import chunk_service
 import traceback
 import logging
 import uuid

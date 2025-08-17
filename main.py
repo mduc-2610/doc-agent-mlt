@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.database import init_db
-from app.api import parse_routes, quiz_routes
+from app.api import parse_routes,question_routes
 from app.config import settings
 import logging
 import asyncio
@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
     # Initialize vector service if enabled
     if settings.enable_vector_search:
         try:
-            from app.services.vector_service import vector_service
+            from app.processor.vector_ingest import vector_service
             logger.info(f"Vector service initialized with model: {settings.embedding_model}")
         except Exception as e:
             logger.error(f"Failed to initialize vector service: {e}")
@@ -86,7 +86,7 @@ async def global_exception_handler(request, exc):
 
 # Include all route modules
 app.include_router(parse_routes.router, prefix="/parse", tags=["Document Parsing"])
-app.include_router(quiz_routes.router, prefix="/quiz", tags=["Quiz Generation"])
+app.include_router(question_routes.router, prefix="/quiz", tags=["Quiz Generation"])
 
 @app.get("/health")
 async def health_check():
