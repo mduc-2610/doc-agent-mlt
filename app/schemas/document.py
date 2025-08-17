@@ -20,20 +20,21 @@ class DocumentResponse(BaseModel):
     id: uuid.UUID
     filename: str
     file_type: str
-    file_size: int
+    file_size: Optional[int] = None  
     source_type: Optional[str] = None
     processing_status: str
+    content_file_path: Optional[str] = None
+    text_length: int
+    session_id: Optional[uuid.UUID] = None  
     created_at: datetime
     updated_at: datetime
-    text_length: int
-    session_id: Optional[str] = None
 
     class Config:
         from_attributes = True
 
-class SessionDetailResponse(SessionResponse):
-    documents: List[DocumentResponse]
 
+class SessionDetailResponse(SessionResponse):
+    pass
 class SessionCreateRequest(BaseModel):
     user_id: str
     name: str

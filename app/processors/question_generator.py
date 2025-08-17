@@ -9,7 +9,7 @@ from typing import List, Dict, Any, Optional
 import uuid
 from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException, UploadFile
-from app.models import Question, QuestionAnswer, Flashcard, QuestionGeneration
+from app.models import Question, QuestionAnswer, Flashcard
 from app.config import current_date_time
 from app.utils.template import (
     RAG_FLASHCARD_PROMPT_TEMPLATE, 
@@ -23,14 +23,13 @@ import time
 
 logger = logging.getLogger(__name__)
 
-@dataclass
-class QuestionAnswerData:
+
+class QuestionAnswerData(BaseModel):
     content: str
     is_correct: bool
     explanation: str = ""
 
-@dataclass
-class QuestionData:
+class QuestionData(BaseModel):
     question: str
     type: str
     difficulty_level: str
@@ -40,8 +39,8 @@ class QuestionData:
     source_context: str
     answers: List[QuestionAnswerData]
 
-@dataclass
-class FlashcardData:
+
+class FlashcardData(BaseModel):
     card_type: str
     question: str
     answer: str
@@ -72,8 +71,7 @@ class QuestionGenerator:
         self.model_name = "deepseek/deepseek-r1-0528:free"
         self.max_retries = 3
     
-    def _make_api_call(self, prompt: str, max_tokens: int = 2000) -> str:
-        """Make API call with error handling"""
+    def _make_api_call(self, prompt: str, max_tokens: int = 4000) -> str:
         try:
             completion = self.client.chat.completions.create(
                 extra_headers={
@@ -90,13 +88,18 @@ class QuestionGenerator:
             raise
     
     def _validate_and_retry(self, prompt: str, validator_class, target_count: int) -> List[Dict]:
-        """Generate content with validation and retry logic"""
         for attempt in range(self.max_retries):
             try:
                 response = self._make_api_call(prompt)
+                with open("debug_gen_response.txt", "a") as f:
+                    f.write("_________________________________________\n")
+                    f.write(f"Prompt: {prompt}\n")
+                    f.write(f"Validator class: {validator_class}\n")
+                    f.write(f"Attempt {attempt + 1}: {response}\n")
+                    
                 cleaned_response = clean_json_response(response)
                 parsed_data = json.loads(cleaned_response)
-                
+
                 validated_items = []
                 for item in parsed_data:
                     try:
@@ -120,13 +123,13 @@ class QuestionGenerator:
         raise HTTPException(status_code=500, detail="Failed to generate valid content after retries")
     
     def generate_rag_quiz(self, topic: str, context: str, target_count: int = 15) -> List[QuestionData]:
-        """Generate quiz questions using RAG approach"""
         quiz_prompt = RAG_QUIZ_PROMPT_TEMPLATE.format(
             topic=topic,
             context=context,
             target_count=target_count
         )
-        
+        print(f"Quiz Context: {context}")
+
         try:
             validated_questions = self._validate_and_retry(
                 quiz_prompt, QuestionValidator, target_count
@@ -164,13 +167,13 @@ class QuestionGenerator:
             return []
     
     def generate_rag_flashcards(self, topic: str, context: str, target_count: int = 15) -> List[FlashcardData]:
-        """Generate flashcards using RAG approach"""
         flashcard_prompt = RAG_FLASHCARD_PROMPT_TEMPLATE.format(
             topic=topic,
             context=context,
             target_count=target_count
         )
-        
+        print(f"Flashcard Context: {context}")
+
         try:
             validated_flashcards = self._validate_and_retry(
                 flashcard_prompt, FlashcardValidator, target_count
@@ -195,22 +198,6 @@ class QuestionGenerator:
             return []
     
     def calculate_quality_score(self, content: Dict[str, Any], context: str) -> float:
-        """Calculate a quality score for generated content"""
-        score = 0.0
-        
-        if len(content.get('question', '')) > 20:
-            score += 0.3
-        if len(content.get('answer', '')) > 10:
-            score += 0.3
-        if len(content.get('explanation', '')) > 20:
-            score += 0.2
-        
-        question_text = content.get('question', '').lower()
-        context_lower = context.lower()
-        common_words = set(question_text.split()) & set(context_lower.split())
-        if len(common_words) > 2:
-            score += 0.2
-        
-        return min(score, 1.0)
+        return 1
 
 question_generator = QuestionGenerator()

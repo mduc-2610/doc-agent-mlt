@@ -13,12 +13,10 @@ logger = logging.getLogger(__name__)
 
 class VectorProcessor:
     def __init__(self, model_name: str = "BAAI/bge-large-en-v1.5"):
-        """Initialize with BGE-large-v1.5 model for high-quality embeddings"""
         self.model = SentenceTransformer(model_name)
         self.embedding_dimension = 1024
     
     def create_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """Create embeddings for a list of texts"""
         try:
             embeddings = self.model.encode(texts, normalize_embeddings=True)
             return embeddings.tolist()
@@ -28,7 +26,6 @@ class VectorProcessor:
             raise
     
     def chunk_and_embed_document(self, db: Session, document_id: str, text_content: str) -> List[DocumentChunk]:
-        """Chunk document and create embeddings for each chunk"""
         try:
             word_count = len(text_content.split())
             text_splitter = chunk_processor.setup_text_splitter(word_count)
@@ -64,7 +61,6 @@ class VectorProcessor:
             raise
     
     def similarity_search(self, db: Session, query: str, document_id: str = None, top_k: int = 5) -> List[Dict[str, Any]]:
-        """Perform similarity search using cosine similarity"""
         try:
             query_embedding = self.create_embeddings([query])[0]
             
@@ -112,13 +108,12 @@ class VectorProcessor:
             raise
     
     def get_relevant_context(self, db: Session, topic: str, document_ids: List[str] = None, max_context_length: int = 4000) -> str:
-        """Get relevant context for a topic by combining top matching chunks"""
         try:
             all_results = []
             
             if document_ids:
                 for doc_id in document_ids:
-                    results = self.similarity_search(db, topic, doc_id, top_k=3)
+                    results = self.similarity_search(db, topic, doc_id, top_k=5)
                     all_results.extend(results)
             else:
                 all_results = self.similarity_search(db, topic, top_k=10)

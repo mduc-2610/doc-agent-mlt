@@ -1,4 +1,4 @@
-from .parse_routes import router as parse_router
+from .document_routes import router as parse_router
 from .question_routes import router as question_router
 
 __all__ = [

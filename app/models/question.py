@@ -21,7 +21,6 @@ class Question(Base):
     source_context = Column(Text)
     generation_model = Column(String(100))
     validation_score = Column(Float)
-    human_validated = Column(Boolean, default=False)
     created_at = Column(DateTime, default=current_date_time)
 
     question_answers = relationship("QuestionAnswer", back_populates="question", cascade="all, delete-orphan")
@@ -49,24 +48,7 @@ class Flashcard(Base):
     source_context = Column(Text)
     generation_model = Column(String(100))
     validation_score = Column(Float)
-    human_validated = Column(Boolean, default=False)
     document_id = Column(UUID(as_uuid=True))
     session_id = Column(UUID(as_uuid=True))
     user_id = Column(String(255))
     created_at = Column(DateTime, default=current_date_time)
-
-class QuestionGeneration(Base):
-    __tablename__ = "question_generations"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_input = Column(Text, nullable=False)
-    context_chunks = Column(JSON, nullable=False)
-    generation_parameters = Column(JSON)
-    output_questions = Column(JSON)
-    final_questions = Column(JSON)
-    model_version = Column(String(100))
-    generation_status = Column(String(50), default="processing")
-    retry_count = Column(Integer, default=0)
-    human_review_status = Column(String(50), default="pending")
-    created_at = Column(DateTime, default=current_date_time)
-    updated_at = Column(DateTime, default=current_date_time, onupdate=current_date_time)

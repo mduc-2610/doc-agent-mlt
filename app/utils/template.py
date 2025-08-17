@@ -1,5 +1,6 @@
 RAG_FLASHCARD_PROMPT_TEMPLATE = """
 You are an expert educational content creator. Based on the topic and provided context, generate exactly {target_count} high-quality flashcards.
+Return exactly {target_count} flashcards as a JSON array with no additional commentary.
 
 TOPIC: {topic}
 
@@ -26,11 +27,11 @@ Each flashcard should be a JSON object with:
 - "answer": Comprehensive answer derived from the context
 - "explanation": Additional context or clarification from the source material
 
-Return exactly {target_count} flashcards as a JSON array with no additional commentary.
 """
 
 RAG_QUIZ_PROMPT_TEMPLATE = """
 You are an expert quiz creator. Based on the topic and provided context, generate exactly {target_count} high-quality quiz questions.
+Return exactly {target_count} questions as a JSON array with no additional commentary.
 
 TOPIC: {topic}
 
@@ -59,7 +60,6 @@ Each question should be a JSON object with:
 - "explanation": Why this answer is correct, with reference to the context
 - "options": For multiple_choice, provide 4 options (including the correct one)
 
-Return exactly {target_count} questions as a JSON array with no additional commentary.
 """
 
 ANSWER_GENERATION_PROMPT_TEMPLATE = """

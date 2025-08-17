@@ -18,6 +18,7 @@ from app.schemas.document import (
     MessageResponse,
     UrlParseRequest,
 )
+from app.utils.helper import as_form
 
 router = APIRouter()
 
@@ -31,7 +32,7 @@ def get_sessions(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/sessions", response_model=SessionResponse)
-async def create_session(request: SessionCreateRequest, db: Session = Depends(get_db)):
+async def create_session(request: SessionCreateRequest = Depends(as_form(SessionCreateRequest)), db: Session = Depends(get_db)):
     try:
         session = document_service.create_session(
             db, request.user_id, request.name, request.description
@@ -48,12 +49,7 @@ async def get_session(session_id: str, db: Session = Depends(get_db)):
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
 
-        documents = document_service.get_documents_by_session(db, session_id)
-
-        return SessionDetailResponse.model_validate({
-            **session.__dict__,
-            "documents": [DocumentResponse.model_validate(d) for d in documents]
-        })
+        return SessionDetailResponse.model_validate(session)
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -68,7 +64,7 @@ async def get_user_sessions(user_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/sessions/{session_id}", response_model=MessageResponse)
-async def update_session(session_id: str, request: SessionUpdateRequest, db: Session = Depends(get_db)):
+async def update_session(session_id: str, request: SessionUpdateRequest = Depends(as_form(SessionUpdateRequest)), db: Session = Depends(get_db)):
     try:
         document_service.update_session(db, session_id, request.name, request.description)
         return MessageResponse(message="Session updated successfully")
@@ -87,7 +83,7 @@ async def delete_session(session_id: str, db: Session = Depends(get_db)):
 
 @router.post("/document", response_model=DocumentResponse)
 async def parse_document(
-    request: FileParseRequest,
+    request: FileParseRequest = Depends(as_form(FileParseRequest)),
     db: Session = Depends(get_db)
 ):
     try:
@@ -99,7 +95,7 @@ async def parse_document(
 
 @router.post("/audio-video", response_model=DocumentResponse)
 async def parse_audio_video(
-    request: FileParseRequest,
+    request: FileParseRequest = Depends(as_form(FileParseRequest)),
     db: Session = Depends(get_db)
 ):
     try:
@@ -110,7 +106,7 @@ async def parse_audio_video(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/web-url", response_model=DocumentResponse)
-async def parse_web_url(request: UrlParseRequest, db: Session = Depends(get_db)):
+async def parse_web_url(request: UrlParseRequest = Depends(as_form(UrlParseRequest)), db: Session = Depends(get_db)):
     try:
         document = document_service.parse_web_url(db, request.url, request.session_id)
         return DocumentResponse.model_validate(document)
@@ -119,7 +115,7 @@ async def parse_web_url(request: UrlParseRequest, db: Session = Depends(get_db))
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/youtube", response_model=DocumentResponse)
-async def parse_youtube(request: UrlParseRequest, db: Session = Depends(get_db)):
+async def parse_youtube(request: UrlParseRequest = Depends(as_form(UrlParseRequest)), db: Session = Depends(get_db)):
     try:
         document = document_service.parse_youtube(db, request.url, request.session_id)
         return DocumentResponse.model_validate(document)
@@ -127,7 +123,7 @@ async def parse_youtube(request: UrlParseRequest, db: Session = Depends(get_db))
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/document/{document_id}", response_model=DocumentResponse)
+@router.get("/documents/{document_id}", response_model=DocumentResponse)
 async def get_document(document_id: str, db: Session = Depends(get_db)):
     try:
         doc = document_service.get_document(db, document_id)

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 import traceback
 from app.schemas.question import (
-    TopicGenerationRequest,
+    QuestionGenerationRequest,
     QuestionResponse,
     FlashcardResponse,
     DocumentFileUploadRequest,
@@ -16,27 +16,28 @@ from app.utils.helper import as_form
 
 router = APIRouter()
 
-@router.post("/generate/topic")
-async def generate_quiz_from_topic(
-    request: TopicGenerationRequest,
-    db: Session = Depends(get_db)
-):
+
+@router.get("/questions/by-session/{session_id}", response_model=List[QuestionResponse])
+async def get_question_by_session(session_id: str, db: Session = Depends(get_db)):
     try:
-        return question_service.process_rag_quiz_and_flashcards(
-            topic=request.topic,
-            document_ids=request.document_ids,
-            session_id=request.session_id,
-            user_id=request.user_id,
-            quiz_count=request.quiz_count,
-            flashcard_count=request.flashcard_count,
-            db=db
-        )
+        questions = question_service.get_questions_by_session(db, session_id)
+        return [QuestionResponse.model_validate(q) for q in questions]
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+    
 
-@router.get("/by-document/{document_id}", response_model=List[QuestionResponse])
-async def get_quiz_by_document(document_id: str, db: Session = Depends(get_db)):
+@router.get("/flashcards/by-session/{session_id}", response_model=List[FlashcardResponse])
+async def get_flashcards_by_session(session_id: str, db: Session = Depends(get_db)):
+    try:
+        flashcards = question_service.get_flashcards_by_session(db, session_id)
+        return [FlashcardResponse.model_validate(f) for f in flashcards]
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@router.get("/questions/by-document/{document_id}", response_model=List[QuestionResponse])
+async def get_question_by_document(document_id: str, db: Session = Depends(get_db)):
     try:
         questions = question_service.get_questions_by_document(db, document_id)
         return [QuestionResponse.model_validate(q) for q in questions]
@@ -53,7 +54,7 @@ async def get_flashcards_by_document(document_id: str, db: Session = Depends(get
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.delete("/by-document/{document_id}")
+@router.delete("/questions/by-document/{document_id}")
 async def delete_questions_by_document(document_id: str, db: Session = Depends(get_db)):
     try:
         question_service.delete_questions_by_document(db, document_id)

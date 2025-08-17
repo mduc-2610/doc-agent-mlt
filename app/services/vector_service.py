@@ -13,5 +13,4 @@ class VectorService:
     def similarity_search(self, db, query: str, document_id: str = None, top_k: int = 5):
         return self.vector_processor.similarity_search(db, query, document_id, top_k)
 
-# Global instance
 vector_service = VectorService()

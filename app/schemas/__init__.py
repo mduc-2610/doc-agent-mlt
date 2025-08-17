@@ -7,5 +7,5 @@ __all__ = [
     "FileParseRequest", "MessageResponse", "FlashcardResponse",
     "QuestionAnswerResponse", "QuestionResponse", "DocumentUploadBase",
     "DocumentFileUploadRequest", "DocumentUrlUploadRequest",
-    "TopicGenerationRequest", "ReviewRequest", "DocumentGenerationRequest"
+    "QuestionGenerationRequest", "ReviewRequest", 
 ]
