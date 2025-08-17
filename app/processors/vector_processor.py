@@ -4,14 +4,14 @@ from sentence_transformers import SentenceTransformer
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.models import DocumentChunk, Document
-from app.processor.chunk import chunk_service
+from app.processors.chunk_processor import chunk_processor
 import traceback
 import logging
 import uuid
 
 logger = logging.getLogger(__name__)
 
-class VectorService:
+class VectorProcessor:
     def __init__(self, model_name: str = "BAAI/bge-large-en-v1.5"):
         """Initialize with BGE-large-v1.5 model for high-quality embeddings"""
         self.model = SentenceTransformer(model_name)
@@ -27,18 +27,15 @@ class VectorService:
             traceback.print_exc()
             raise
     
-    def chunk_and_embed_document(self, db: Session, document_id: str, text_content: str, target_chunks: int = 10) -> List[DocumentChunk]:
+    def chunk_and_embed_document(self, db: Session, document_id: str, text_content: str) -> List[DocumentChunk]:
         """Chunk document and create embeddings for each chunk"""
         try:
-            # Use existing chunking service
             word_count = len(text_content.split())
-            text_splitter = chunk_service.setup_text_splitter(word_count, target_chunks)
+            text_splitter = chunk_processor.setup_text_splitter(word_count)
             chunks = text_splitter.split_text(text_content)
             
-            # Create embeddings for all chunks
             embeddings = self.create_embeddings(chunks)
             
-            # Store chunks with embeddings in database
             chunk_objects = []
             for i, (chunk_text, embedding) in enumerate(zip(chunks, embeddings)):
                 chunk_obj = DocumentChunk(
@@ -69,10 +66,8 @@ class VectorService:
     def similarity_search(self, db: Session, query: str, document_id: str = None, top_k: int = 5) -> List[Dict[str, Any]]:
         """Perform similarity search using cosine similarity"""
         try:
-            # Create embedding for query
             query_embedding = self.create_embeddings([query])[0]
             
-            # Build SQL query for cosine similarity
             similarity_query = """
                 SELECT 
                     id,
@@ -94,11 +89,9 @@ class VectorService:
             similarity_query += " ORDER BY similarity_score DESC LIMIT :top_k"
             params["top_k"] = top_k
             
-            # Execute query
             result = db.execute(text(similarity_query), params)
             results = result.fetchall()
             
-            # Convert to list of dictionaries
             search_results = []
             for row in results:
                 search_results.append({
@@ -121,7 +114,6 @@ class VectorService:
     def get_relevant_context(self, db: Session, topic: str, document_ids: List[str] = None, max_context_length: int = 4000) -> str:
         """Get relevant context for a topic by combining top matching chunks"""
         try:
-            # Search for relevant chunks
             all_results = []
             
             if document_ids:
@@ -131,7 +123,6 @@ class VectorService:
             else:
                 all_results = self.similarity_search(db, topic, top_k=10)
             
-            # Sort by similarity score and combine content
             all_results.sort(key=lambda x: x['similarity_score'], reverse=True)
             
             context_parts = []
@@ -143,9 +134,8 @@ class VectorService:
                     context_parts.append(content)
                     current_length += len(content)
                 else:
-                    # Add partial content if it fits
                     remaining_space = max_context_length - current_length
-                    if remaining_space > 100:  # Only add if significant space left
+                    if remaining_space > 100:
                         context_parts.append(content[:remaining_space] + "...")
                     break
             
@@ -155,30 +145,5 @@ class VectorService:
             logger.error(f"Error getting relevant context: {e}")
             traceback.print_exc()
             raise
-    
-    def update_document_embeddings(self, db: Session, document_id: str, target_chunks: int = 10):
-        """Update embeddings for an existing document"""
-        try:
-            # Get document content
-            document = db.query(Document).filter(Document.id == document_id).first()
-            if not document or not document.content_file_path:
-                raise ValueError(f"Document {document_id} not found or has no content")
-            
-            with open(document.content_file_path, 'r', encoding='utf-8') as f:
-                text_content = f.read()
-            
-            # Delete existing chunks
-            db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete()
-            db.commit()
-            
-            # Create new chunks with embeddings
-            return self.chunk_and_embed_document(db, document_id, text_content, target_chunks)
-            
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Error updating embeddings for document {document_id}: {e}")
-            traceback.print_exc()
-            raise
 
-# Global instance
-vector_service = VectorService()
+vector_processor = VectorProcessor()

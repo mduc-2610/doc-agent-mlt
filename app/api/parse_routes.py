@@ -4,12 +4,11 @@ from typing import List, Optional
 import uuid
 from fastapi import APIRouter, Depends, File, UploadFile, Form, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
 
 from app.database import get_db
 from app.services.document_service import document_service
 from datetime import datetime
-from app.request_response.parse import (
+from app.schemas.document import (
     FileParseRequest,
     SessionCreateRequest,
     SessionUpdateRequest,
@@ -20,9 +19,7 @@ from app.request_response.parse import (
     UrlParseRequest,
 )
 
-
 router = APIRouter()
-
 
 @router.get("/sessions", response_model=List[SessionResponse])
 def get_sessions(db: Session = Depends(get_db)):
@@ -32,7 +29,6 @@ def get_sessions(db: Session = Depends(get_db)):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.post("/sessions", response_model=SessionResponse)
 async def create_session(request: SessionCreateRequest, db: Session = Depends(get_db)):
@@ -44,7 +40,6 @@ async def create_session(request: SessionCreateRequest, db: Session = Depends(ge
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/sessions/{session_id}", response_model=SessionDetailResponse)
 async def get_session(session_id: str, db: Session = Depends(get_db)):
@@ -63,7 +58,6 @@ async def get_session(session_id: str, db: Session = Depends(get_db)):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/sessions/user/{user_id}", response_model=List[SessionResponse])
 async def get_user_sessions(user_id: str, db: Session = Depends(get_db)):
     try:
@@ -72,7 +66,6 @@ async def get_user_sessions(user_id: str, db: Session = Depends(get_db)):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.put("/sessions/{session_id}", response_model=MessageResponse)
 async def update_session(session_id: str, request: SessionUpdateRequest, db: Session = Depends(get_db)):
@@ -83,7 +76,6 @@ async def update_session(session_id: str, request: SessionUpdateRequest, db: Ses
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.delete("/sessions/{session_id}", response_model=MessageResponse)
 async def delete_session(session_id: str, db: Session = Depends(get_db)):
     try:
@@ -92,7 +84,6 @@ async def delete_session(session_id: str, db: Session = Depends(get_db)):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.post("/document", response_model=DocumentResponse)
 async def parse_document(
@@ -106,7 +97,6 @@ async def parse_document(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/audio-video", response_model=DocumentResponse)
 async def parse_audio_video(
     request: FileParseRequest,
@@ -119,7 +109,6 @@ async def parse_audio_video(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/web-url", response_model=DocumentResponse)
 async def parse_web_url(request: UrlParseRequest, db: Session = Depends(get_db)):
     try:
@@ -129,7 +118,6 @@ async def parse_web_url(request: UrlParseRequest, db: Session = Depends(get_db))
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/youtube", response_model=DocumentResponse)
 async def parse_youtube(request: UrlParseRequest, db: Session = Depends(get_db)):
     try:
@@ -138,7 +126,6 @@ async def parse_youtube(request: UrlParseRequest, db: Session = Depends(get_db))
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/document/{document_id}", response_model=DocumentResponse)
 async def get_document(document_id: str, db: Session = Depends(get_db)):
@@ -152,7 +139,6 @@ async def get_document(document_id: str, db: Session = Depends(get_db)):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/documents", response_model=List[DocumentResponse])
 async def get_documents(db: Session = Depends(get_db)):
     try:
@@ -161,7 +147,6 @@ async def get_documents(db: Session = Depends(get_db)):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/documents/session/{session_id}", response_model=List[DocumentResponse])
 async def get_documents_by_session(session_id: str, db: Session = Depends(get_db)):

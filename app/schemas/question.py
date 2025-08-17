@@ -1,11 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form
-from sqlalchemy.orm import Session
 from pydantic import BaseModel
-
+from fastapi import UploadFile, File
 from typing import Optional, List
 from datetime import datetime
 import uuid
-
 
 class FlashcardResponse(BaseModel):
     id: uuid.UUID
@@ -26,7 +23,6 @@ class FlashcardResponse(BaseModel):
     class Config:
         from_attributes = True
 
-
 class QuestionAnswerResponse(BaseModel):
     id: uuid.UUID
     content: str
@@ -35,7 +31,6 @@ class QuestionAnswerResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
 
 class QuestionResponse(BaseModel):
     id: uuid.UUID
@@ -58,13 +53,11 @@ class QuestionResponse(BaseModel):
     class Config:
         from_attributes = True
 
-
 class DocumentUploadBase(BaseModel):
     user_id: str
     session_id: Optional[str] = None
     question_count: int = 15
     flashcard_count: int = 15
-
 
 class DocumentFileUploadRequest(DocumentUploadBase):
     file: UploadFile = File(...)
@@ -82,10 +75,9 @@ class TopicGenerationRequest(BaseModel):
 
 class ReviewRequest(BaseModel):
     generation_id: str
-    action: str  # "approve", "reject", "approve_selected"
+    action: str
     selected_question_ids: Optional[List[str]] = None
     reviewer_notes: Optional[str] = None
-
 
 class DocumentGenerationRequest(BaseModel):
     topic: str = "General content analysis"

@@ -4,7 +4,6 @@ from datetime import datetime
 from typing import List, Optional
 import uuid
 
-
 class SessionResponse(BaseModel):
     id: uuid.UUID
     user_id: str
@@ -16,7 +15,6 @@ class SessionResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
 
 class DocumentResponse(BaseModel):
     id: uuid.UUID
@@ -33,7 +31,6 @@ class DocumentResponse(BaseModel):
     class Config:
         from_attributes = True
 
-
 class SessionDetailResponse(SessionResponse):
     documents: List[DocumentResponse]
 
@@ -42,11 +39,9 @@ class SessionCreateRequest(BaseModel):
     name: str
     description: Optional[str] = ""
 
-
 class SessionUpdateRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-
 
 class UrlParseRequest(BaseModel):
     url: str

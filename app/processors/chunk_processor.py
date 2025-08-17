@@ -1,15 +1,10 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from transformers import pipeline
 
-class ChunkService:
-    def __init__(self, model_name="facebook/bart-large-cnn"):
-        self.summarizer = pipeline("summarization", model=model_name)
+class ChunkProcessor:
+    def __init__(self):
+        pass
 
     def setup_text_splitter(self, document_length: int):
-        """
-        Automatically decide chunk_size and chunk_overlap 
-        based on document length. No need for target_chunks.
-        """
         estimated_chars = document_length * 6  
 
         if estimated_chars <= 2000:
@@ -32,4 +27,4 @@ class ChunkService:
             separators=["\n\n", "\n", ". ", " ", ""]
         )    
 
-chunk_service = ChunkService()
+chunk_processor = ChunkProcessor()

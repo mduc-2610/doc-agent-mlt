@@ -5,16 +5,14 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, UploadFile
 from app.models import Document, Session as SessionModel
-from app.processor.content_ingest import (
-    process_pdf_docx, process_image, process_web_url,
-    download_youtube_video, process_audio_video, save_temp_file, save_content_to_file
-)
-from app.processor.vector_ingest import vector_service
+from app.processors.content_processor import content_processor
+from app.processors.vector_processor import vector_processor
 from app.config import settings, current_date_time
 
 class DocumentService:
     def __init__(self):
-        self.vector_service = vector_service
+        self.content_processor = content_processor
+        self.vector_processor = vector_processor
 
     def get_sessions(self, db: Session):
         return db.query(SessionModel).all()
@@ -76,7 +74,6 @@ class DocumentService:
             db.rollback()
             raise HTTPException(status_code=500, detail=str(e))
 
-    # -------------------- Document Methods -------------------- #
     def get_document(self, db: Session, document_id: str) -> Optional[Document]:
         return db.query(Document).filter(Document.id == document_id).first()
 
@@ -86,7 +83,6 @@ class DocumentService:
     def get_documents_by_session(self, db: Session, session_id: str):
         return db.query(Document).filter(Document.session_id == session_id).all()
 
-    # -------------------- Parsing Methods -------------------- #
     def parse_document(self, db: Session, file: UploadFile, session_id: str = None, create_embeddings: bool = True) -> Document:
         allowed_types = {
             'application/pdf': 'pdf',
@@ -102,15 +98,16 @@ class DocumentService:
         temp_file_path = None
 
         try:
-            temp_file_path = save_temp_file(file)
+            temp_file_path = self.content_processor.save_temp_file(file)
+            
             if file_type in ['pdf', 'docx']:
-                raw_text = process_pdf_docx(temp_file_path)
+                raw_text = self.content_processor.process_pdf_docx(temp_file_path)
             elif file_type == 'image':
-                raw_text = process_image(temp_file_path)
+                raw_text = self.content_processor.process_image(temp_file_path)
             else:
                 raise HTTPException(status_code=400, detail="Unsupported file type")
 
-            content_file_path = save_content_to_file(raw_text, document_id)
+            content_file_path = self.content_processor.save_content_to_file(raw_text, document_id)
             document = Document(
                 id=document_id,
                 filename=file.filename,
@@ -129,7 +126,7 @@ class DocumentService:
 
             if create_embeddings:
                 try:
-                    chunks = self.vector_service.chunk_and_embed_document(db, document_id, raw_text)
+                    chunks = self.vector_processor.chunk_and_embed_document(db, document_id, raw_text)
                     document.processing_status = "completed"
                     db.commit()
                     print(f"Created {len(chunks)} chunks with embeddings for document {document_id}")
@@ -164,9 +161,9 @@ class DocumentService:
         temp_file_path = None
 
         try:
-            temp_file_path = save_temp_file(file)
-            raw_text = process_audio_video(temp_file_path)
-            content_file_path = save_content_to_file(raw_text, document_id)
+            temp_file_path = self.content_processor.save_temp_file(file)
+            raw_text = self.content_processor.process_audio_video(temp_file_path)
+            content_file_path = self.content_processor.save_content_to_file(raw_text, document_id)
 
             document = Document(
                 id=document_id,
@@ -186,7 +183,7 @@ class DocumentService:
 
             if create_embeddings:
                 try:
-                    chunks = self.vector_service.chunk_and_embed_document(db, document_id, raw_text)
+                    chunks = self.vector_processor.chunk_and_embed_document(db, document_id, raw_text)
                     document.processing_status = "completed"
                     db.commit()
                     print(f"Created {len(chunks)} chunks with embeddings for document {document_id}")
@@ -211,8 +208,8 @@ class DocumentService:
         document_id = str(uuid.uuid4())
 
         try:
-            raw_text = process_web_url(url)
-            content_file_path = save_content_to_file(raw_text, document_id)
+            raw_text = self.content_processor.process_web_url(url)
+            content_file_path = self.content_processor.save_content_to_file(raw_text, document_id)
 
             document = Document(
                 id=document_id,
@@ -231,7 +228,7 @@ class DocumentService:
 
             if create_embeddings:
                 try:
-                    chunks = self.vector_service.chunk_and_embed_document(db, document_id, raw_text)
+                    chunks = self.vector_processor.chunk_and_embed_document(db, document_id, raw_text)
                     document.processing_status = "completed"
                     db.commit()
                     print(f"Created {len(chunks)} chunks with embeddings for document {document_id}")
@@ -252,9 +249,9 @@ class DocumentService:
         audio_path = None
 
         try:
-            audio_path = download_youtube_video(url)
-            raw_text = process_audio_video(audio_path)
-            content_file_path = save_content_to_file(raw_text, document_id)
+            audio_path = self.content_processor.download_youtube_video(url)
+            raw_text = self.content_processor.process_audio_video(audio_path)
+            content_file_path = self.content_processor.save_content_to_file(raw_text, document_id)
 
             document = Document(
                 id=document_id,
@@ -273,7 +270,7 @@ class DocumentService:
 
             if create_embeddings:
                 try:
-                    chunks = self.vector_service.chunk_and_embed_document(db, document_id, raw_text)
+                    chunks = self.vector_processor.chunk_and_embed_document(db, document_id, raw_text)
                     document.processing_status = "completed"
                     db.commit()
                     print(f"Created {len(chunks)} chunks with embeddings for document {document_id}")

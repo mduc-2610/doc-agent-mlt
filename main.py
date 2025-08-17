@@ -3,16 +3,14 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.database import init_db
-from app.api import parse_routes,question_routes
+from app.api import parse_routes, question_routes
 from app.config import settings
 import logging
 import asyncio
 from contextlib import asynccontextmanager
-import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -20,17 +18,15 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Document Processing Monolith with RAG capabilities...")
     await init_db()
     
-    # Initialize vector service if enabled
     if settings.enable_vector_search:
         try:
-            from app.processor.vector_ingest import vector_service
+            from app.processors.vector_processor import vector_processor
             logger.info(f"Vector service initialized with model: {settings.embedding_model}")
         except Exception as e:
             logger.error(f"Failed to initialize vector service: {e}")
             if settings.enable_rag_generation:
                 logger.warning("RAG generation disabled due to vector service failure")
     
-    # Validate database connection
     try:
         from app.database import get_db
         from sqlalchemy import text
@@ -38,7 +34,6 @@ async def lifespan(app: FastAPI):
         db.execute(text("SELECT 1"))
         logger.info("Database connection validated")
         
-        # Check if pgvector extension is available
         if settings.enable_vector_search:
             try:
                 result = db.execute(text("SELECT extname FROM pg_extension WHERE extname = 'vector'"))
@@ -75,7 +70,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     logger.error(f"Global exception: {exc}", exc_info=True)
@@ -84,9 +78,8 @@ async def global_exception_handler(request, exc):
         content={"detail": "Internal server error", "type": "internal_error"}
     )
 
-# Include all route modules
 app.include_router(parse_routes.router, prefix="/parse", tags=["Document Parsing"])
-app.include_router(question_routes.router, prefix="/quiz", tags=["Quiz Generation"])
+app.include_router(question_routes.router, prefix="/question", tags=["Quiz Generation"])
 
 @app.get("/health")
 async def health_check():
@@ -114,7 +107,6 @@ async def health_check():
         status["database"] = f"error: {str(e)}"
         status["status"] = "degraded"
     
-    # Check vector service if enabled
     if settings.enable_vector_search:
         try:
             from app.services.vector_service import vector_service
