@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     
     content_files_dir: str = "content_files"
     temp_files_dir: str = "tmp_dir"
+    source_files_dir: str = "source_files"
+    summary_files_dir: str = "summary_files"
     
     class Config:
         case_sensitive = False

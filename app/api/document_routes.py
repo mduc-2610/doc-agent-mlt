@@ -87,7 +87,7 @@ async def parse_document(
     db: Session = Depends(get_db)
 ):
     try:
-        document = document_service.parse_document(db, request.file, request.session_id)
+        document = document_service.parse_document(db, request=request)
         return DocumentResponse.model_validate(document)
     except Exception as e:
         traceback.print_exc()
@@ -99,7 +99,7 @@ async def parse_audio_video(
     db: Session = Depends(get_db)
 ):
     try:
-        document = document_service.parse_audio_video(db, request.file, request.session_id)
+        document = document_service.parse_audio_video(db, request=request)
         return DocumentResponse.model_validate(document)
     except Exception as e:
         traceback.print_exc()
@@ -108,7 +108,7 @@ async def parse_audio_video(
 @router.post("/web-url", response_model=DocumentResponse)
 async def parse_web_url(request: UrlParseRequest = Depends(as_form(UrlParseRequest)), db: Session = Depends(get_db)):
     try:
-        document = document_service.parse_web_url(db, request.url, request.session_id)
+        document = document_service.parse_web_url(db, request=request)
         return DocumentResponse.model_validate(document)
     except Exception as e:
         traceback.print_exc()
@@ -117,7 +117,7 @@ async def parse_web_url(request: UrlParseRequest = Depends(as_form(UrlParseReque
 @router.post("/youtube", response_model=DocumentResponse)
 async def parse_youtube(request: UrlParseRequest = Depends(as_form(UrlParseRequest)), db: Session = Depends(get_db)):
     try:
-        document = document_service.parse_youtube(db, request.url, request.session_id)
+        document = document_service.parse_youtube(db, request=request)
         return DocumentResponse.model_validate(document)
     except Exception as e:
         traceback.print_exc()

@@ -16,11 +16,29 @@ class Document(Base):
     source_type = Column(String(50), nullable=False)
     processing_status = Column(String(50), default="processing")
     content_file_path = Column(String(500))
+    source_file_path = Column(String(500))
     text_length = Column(Integer, default=0)
     session_id = Column(UUID(as_uuid=True))
     created_at = Column(DateTime, default=current_date_time)
     updated_at = Column(DateTime, default=current_date_time, onupdate=current_date_time)
 
+class SessionSummary(Base):
+    __tablename__ = "session_summaries"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id"), nullable=False, unique=True)
+    summary_content = Column(Text, nullable=False)
+    document_count = Column(Integer, nullable=False, default=0)
+    total_word_count = Column(Integer, nullable=False, default=0)
+    summary_word_count = Column(Integer, nullable=False, default=0)
+    generation_model = Column(String(100), nullable=False)
+    summary_file_path = Column(String(500), nullable=False)
+    created_at = Column(DateTime, default=current_date_time)
+    updated_at = Column(DateTime, default=current_date_time, onupdate=current_date_time)
+    
+    # Relationship to session
+    session = relationship("Session", backref="summary")
+    
 class DocumentChunk(Base):
     __tablename__ = "document_chunks"
     

@@ -1,11 +1,14 @@
-from app.api import document_routes
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 import logging
 from app.database import init_db
-from app.api import question_routes
+from app.api import (
+    document_routes,
+    question_routes,
+    summary_routes,
+)
 from app.config import settings
 from contextlib import asynccontextmanager
 from app.database import get_db
@@ -67,6 +70,7 @@ app.add_middleware(
 
 app.include_router(document_routes.router, prefix="/document", tags=["Document Parsing"])
 app.include_router(question_routes.router, prefix="/question", tags=["Quiz Generation"])
+app.include_router(summary_routes.router, prefix="/summary", tags=["Summary Generation"])
 
 @app.get("/health")
 async def health_check():

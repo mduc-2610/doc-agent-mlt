@@ -16,6 +16,9 @@ from app.processors.content_processor import content_processor
 from app.utils.helper import detect_url_type, detect_file_type
 from app.services.vector_service import vector_service
 from app.services.document_service import document_service
+from app.services.summary_service import summary_service
+from app.schemas.document import FileParseRequest, UrlParseRequest
+
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +121,17 @@ class QuestionService:
                     created_at=current_date_time(),
                 )
                 db.add(flashcard_obj)
+           
+            session_summary = None
+            if request.session_id:
+                try:
+                    summary_service.generate_or_update_summary(db, request.session_id, regenerate=False)
+                    session_summary = summary_service.get_session_summary(db, request.session_id)
+                    logger.info(f"Summary auto-generated/updated for session {request.session_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to auto-generate summary for session {request.session_id}: {e}")
 
+            db.commit()
 
             return {
                 "topic": request.topic,
@@ -126,6 +139,7 @@ class QuestionService:
                 "session_id": request.session_id,
                 "questions": questions,
                 "flashcards": flashcards,
+                "summary": session_summary,
                 "context_used": relevant_context[:200] + "..." if len(relevant_context) > 200 else relevant_context,
                 "created_at": current_date_time(),
             }
@@ -140,9 +154,9 @@ class QuestionService:
             
             url_type = detect_url_type(request.url)
             if url_type == "youtube":
-                document = document_service.parse_youtube(db, request.url, request.session_id)
+                document = document_service.parse_youtube(db, UrlParseRequest(url=request.url, session_id=request.session_id))
             else:
-                document = document_service.parse_web_url(db, request.url, request.session_id)
+                document = document_service.parse_web_url(db, UrlParseRequest(url=request.url, session_id=request.session_id))
 
             document_id = str(document.id)
             with open(document.content_file_path, "r", encoding="utf-8") as f:
@@ -171,9 +185,9 @@ class QuestionService:
             
             file_type = detect_file_type(request.file)
             if file_type == "audio_video":
-                document = document_service.parse_audio_video(db, request.file, request.session_id)
+                document = document_service.parse_audio_video(db, FileParseRequest(file=request.file, session_id=request.session_id))
             else:
-                document = document_service.parse_document(db, request.file, request.session_id)
+                document = document_service.parse_document(db, FileParseRequest(file=request.file, session_id=request.session_id))
 
             document_id = str(document.id)
             with open(document.content_file_path, "r", encoding="utf-8") as f:

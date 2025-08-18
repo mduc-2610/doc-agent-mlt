@@ -8,6 +8,7 @@ from app.models import Document, Session as SessionModel
 from app.processors.content_processor import content_processor
 from app.processors.vector_processor import vector_processor
 from app.config import settings, current_date_time
+from app.schemas.document import FileParseRequest, UrlParseRequest
 
 class DocumentService:
     def __init__(self):
@@ -83,22 +84,22 @@ class DocumentService:
     def get_documents_by_session(self, db: Session, session_id: str):
         return db.query(Document).filter(Document.session_id == session_id).all()
 
-    def parse_document(self, db: Session, file: UploadFile, session_id: str = None, create_embeddings: bool = True) -> Document:
+    def parse_document(self, db: Session, request: FileParseRequest, create_embeddings: bool = True) -> Document:
         allowed_types = {
             'application/pdf': 'pdf',
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
             'image/jpeg': 'image', 'image/png': 'image', 'image/gif': 'image',
             'image/bmp': 'image', 'image/tiff': 'image'
         }
-        if file.content_type not in allowed_types:
+        if request.file.content_type not in allowed_types:
             raise HTTPException(status_code=400, detail="Unsupported file type")
 
-        file_type = allowed_types[file.content_type]
+        file_type = allowed_types[request.file.content_type]
         document_id = str(uuid.uuid4())
         temp_file_path = None
 
         try:
-            temp_file_path = self.content_processor.save_temp_file(file)
+            temp_file_path = self.content_processor.save_temp_file(request.file)
             
             if file_type in ['pdf', 'docx']:
                 raw_text = self.content_processor.process_pdf_docx(temp_file_path)
@@ -108,16 +109,19 @@ class DocumentService:
                 raise HTTPException(status_code=400, detail="Unsupported file type")
 
             content_file_path = self.content_processor.save_content_to_file(raw_text, document_id)
+            source_file_path = self.content_processor.save_source_file(request.file, document_id)
+
             document = Document(
                 id=document_id,
-                filename=file.filename,
+                filename=request.file.filename,
                 file_type=file_type,
                 source_type="upload",
                 content_file_path=content_file_path,
-                file_size=file.size,
+                source_file_path=source_file_path,
+                file_size=request.file.size,
                 processing_status="processing" if create_embeddings else "completed",
                 text_length=len(raw_text),
-                session_id=session_id
+                session_id=request.session_id
             )
 
             db.add(document)
@@ -147,34 +151,36 @@ class DocumentService:
             if temp_file_path and os.path.exists(temp_file_path):
                 os.remove(temp_file_path)
 
-    def parse_audio_video(self, db: Session, file: UploadFile, session_id: str = None, create_embeddings: bool = True) -> Document:
+    def parse_audio_video(self, db: Session, request: FileParseRequest, create_embeddings: bool = True) -> Document:
         allowed_types = {
             'audio/mpeg': 'audio', 'audio/wav': 'audio', 'audio/mp3': 'audio',
             'video/mp4': 'video', 'video/avi': 'video', 'video/quicktime': 'video',
             'video/x-msvideo': 'video'
         }
-        if file.content_type not in allowed_types:
+        if request.file.content_type not in allowed_types:
             raise HTTPException(status_code=400, detail="Unsupported audio/video file type")
 
-        file_type = allowed_types[file.content_type]
+        file_type = allowed_types[request.file.content_type]
         document_id = str(uuid.uuid4())
         temp_file_path = None
 
         try:
-            temp_file_path = self.content_processor.save_temp_file(file)
+            temp_file_path = self.content_processor.save_temp_file(request.file)
             raw_text = self.content_processor.process_audio_video(temp_file_path)
             content_file_path = self.content_processor.save_content_to_file(raw_text, document_id)
+            source_file_path = self.content_processor.save_source_file(request.file, document_id)
 
             document = Document(
                 id=document_id,
-                filename=file.filename,
+                filename=request.file.filename,
                 file_type=file_type,
                 source_type="upload",
                 content_file_path=content_file_path,
-                file_size=file.size,
+                source_file_path=source_file_path,
+                file_size=request.file.size,
                 processing_status="processing" if create_embeddings else "completed",
                 text_length=len(raw_text),
-                session_id=session_id
+                session_id=request.session_id
             )
 
             db.add(document)
@@ -204,22 +210,23 @@ class DocumentService:
             if temp_file_path and os.path.exists(temp_file_path):
                 os.remove(temp_file_path)
 
-    def parse_web_url(self, db: Session, url: str, session_id: str = None, create_embeddings: bool = True) -> Document:
+    def parse_web_url(self, db: Session, request: UrlParseRequest, create_embeddings: bool = True) -> Document:
         document_id = str(uuid.uuid4())
 
         try:
-            raw_text = self.content_processor.process_web_url(url)
+            raw_text = self.content_processor.process_web_url(request.url)
             content_file_path = self.content_processor.save_content_to_file(raw_text, document_id)
 
             document = Document(
                 id=document_id,
-                filename=url,
+                filename=request.url,
                 file_type="web",
                 source_type="url",
                 content_file_path=content_file_path,
+                source_file_path=None,
                 processing_status="processing" if create_embeddings else "completed",
                 text_length=len(raw_text),
-                session_id=session_id
+                session_id=request.session_id
             )
 
             db.add(document)
@@ -244,24 +251,26 @@ class DocumentService:
             db.rollback()
             raise HTTPException(status_code=500, detail=str(e))
 
-    def parse_youtube(self, db: Session, url: str, session_id: str = None, create_embeddings: bool = True) -> Document:
+    def parse_youtube(self, db: Session, request: UrlParseRequest, create_embeddings: bool = True) -> Document:
         document_id = str(uuid.uuid4())
         audio_path = None
 
         try:
-            audio_path = self.content_processor.download_youtube_video(url)
+            audio_path = self.content_processor.download_youtube_video(request.url)
             raw_text = self.content_processor.process_audio_video(audio_path)
             content_file_path = self.content_processor.save_content_to_file(raw_text, document_id)
+            source_file_path = self.content_processor.save_local_file(audio_path, document_id)
 
             document = Document(
                 id=document_id,
-                filename=url,
+                filename=request.url,
                 file_type="youtube",
                 source_type="youtube",
                 content_file_path=content_file_path,
+                source_file_path=source_file_path,
                 processing_status="processing" if create_embeddings else "completed",
                 text_length=len(raw_text),
-                session_id=session_id
+                session_id=request.session_id
             )
 
             db.add(document)

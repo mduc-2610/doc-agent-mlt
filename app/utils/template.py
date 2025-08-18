@@ -62,6 +62,30 @@ Each question should be a JSON object with:
 
 """
 
+SUMMARY_GENERATION_PROMPT_TEMPLATE = """
+You are an expert educational content summarizer. Create a comprehensive study summary for the session "{session_name}" based on the provided documents.
+
+DOCUMENT CONTENT ({document_count} documents):
+{content}
+
+Generate a well-structured summary that includes:
+- Key terms and definitions
+- Main ideas and concepts
+- Important data and facts
+- Key takeaways for exam preparation
+
+REQUIREMENTS:
+- Create ONE unified summary (do not split into separate sections)
+- Focus on the most important information for study purposes
+- Use clear, concise language
+- Highlight critical concepts that would likely appear on exams
+- Include specific data, numbers, or facts when relevant
+- Detect the language of the content automatically and write the summary in the same language
+- Ensure the summary is comprehensive yet concise (aim for 800-1200 words)
+
+Write a study-focused summary that would help someone prepare for an exam on this material:
+"""
+
 ANSWER_GENERATION_PROMPT_TEMPLATE = """
 Based on the following question and context, generate a comprehensive correct answer with explanation.
 

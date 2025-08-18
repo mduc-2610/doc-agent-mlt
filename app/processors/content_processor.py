@@ -44,12 +44,36 @@ class ContentProcessor:
         self.whisper_model = WhisperModel()
 
     def save_content_to_file(self, content: str, document_id: str) -> str:
-        """Save content to file and return file path"""
         os.makedirs(settings.content_files_dir, exist_ok=True)
         file_path = os.path.join(settings.content_files_dir, f"{document_id}.txt")
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content)
         return file_path
+    
+    def save_source_file(self, file: UploadFile, document_id: str) -> str: 
+        os.makedirs(settings.source_files_dir, exist_ok=True)
+        _, ext = os.path.splitext(file.filename)
+        if not ext:  
+            ext = f".{file.content_type.split('/')[-1]}"
+        source_file_path = os.path.join(settings.source_files_dir, f"{document_id}{ext}")
+        with open(source_file_path, "wb") as buffer:
+            contents = file.file.read()
+            buffer.write(contents)
+        
+        return source_file_path
+    
+    def save_local_file(self, file_path: str, document_id: str) -> str:
+        os.makedirs(settings.source_files_dir, exist_ok=True)
+        _, ext = os.path.splitext(file_path)
+        if not ext:
+            ext = ".bin"  
+        
+        source_file_path = os.path.join(settings.source_files_dir, f"{document_id}{ext}")
+        with open(file_path, "rb") as src, open(source_file_path, "wb") as dst:
+            dst.write(src.read())
+        
+        return source_file_path
+
 
     def save_temp_file(self, file: UploadFile) -> str:
         os.makedirs(settings.temp_files_dir, exist_ok=True)

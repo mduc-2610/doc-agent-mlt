@@ -1,8 +1,10 @@
 **/__pycache__
 .env
 **/.env
-/content_files
 app.log
 **/test_syntax.py
 **/note.txt
 **/debug_gen_response.txt
+**/content_files
+**/source_files
+**/summary_files
