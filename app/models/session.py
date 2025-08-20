@@ -13,3 +13,5 @@ class Session(Base):
     description = Column(Text)
     created_at = Column(DateTime, default=current_date_time)
     updated_at = Column(DateTime, default=current_date_time, onupdate=current_date_time)
+
+    

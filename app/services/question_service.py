@@ -14,11 +14,20 @@ from app.schemas.question import (
 )
 from app.processors.content_processor import content_processor
 from app.utils.helper import detect_url_type, detect_file_type
-from app.services.vector_service import vector_service
+from app.services.vector_service import VectorService
 from app.services.document_service import document_service
 from app.services.summary_service import summary_service
 from app.schemas.document import FileParseRequest, UrlParseRequest
-
+from app.utils.error_handling import (
+    handle_database_errors, 
+    handle_llm_errors, 
+    validate_input,
+    validate_question_generation_request,
+    ErrorCollector,
+    safe_execute
+)
+from app.services.monitoring_service import monitoring_service, MonitoredOperation
+from app.database import BatchOperations
 
 logger = logging.getLogger(__name__)
 
@@ -26,188 +35,223 @@ class QuestionService:
     def __init__(self):
         self.question_generator = question_generator
         self.content_processor = content_processor
-        self.vector_service = vector_service
+        self.vector_service = VectorService()
 
+    @handle_database_errors
     def get_questions_by_session(self, db: Session, session_id: str):
-        return (
-            db.query(Question)
-            .options(joinedload(Question.question_answers))
-            .filter(Question.session_id == session_id)
-            .all()
-        )
-    
-    def get_questions_by_document(self, db: Session, document_id: str):
-        return (
-            db.query(Question)
-            .options(joinedload(Question.question_answers))
-            .filter(Question.document_id == document_id)
-            .all()
-        )
-
-    def get_flashcards_by_session(self, db: Session, session_id: str):
-        return db.query(Flashcard).filter(Flashcard.session_id == session_id).all()
-
-
-    def get_flashcards_by_document(self, db: Session, document_id: str):
-        return db.query(Flashcard).filter(Flashcard.document_id == document_id).all()
-
-    def delete_questions_by_document(self, db: Session, document_id: str):
-        db.query(Question).filter(Question.document_id == document_id).delete()
-        db.commit()
-
-    def delete_flashcards_by_document(self, db: Session, document_id: str):
-        db.query(Flashcard).filter(Flashcard.document_id == document_id).delete()
-        db.commit()
-
-    def process_rag_quiz_and_flashcards(self, request: QuestionGenerationRequest, db: Session) -> Dict[str, Any]:
-        try:
-            relevant_context = self.vector_service.get_relevant_context(
-                db, request.topic, request.document_ids, max_context_length=4000
+        with MonitoredOperation("get_questions_by_session") as op:
+            op.add_metadata(session_id=session_id)
+            
+            questions = (
+                db.query(Question)
+                .options(joinedload(Question.question_answers))
+                .filter(Question.session_id == session_id)
+                .all()
             )
-            if not relevant_context.strip():
-                raise HTTPException(status_code=400, detail="No relevant context found for the given topic")
+            
+            op.add_metadata(questions_found=len(questions))
+            return questions
+    
 
-            questions = self.question_generator.generate_rag_quiz(request.topic, relevant_context, request.quiz_count)
-            flashcards = self.question_generator.generate_rag_flashcards(request.topic, relevant_context, request.flashcard_count)
+    @handle_database_errors
+    def get_flashcards_by_session(self, db: Session, session_id: str):
+        with MonitoredOperation("get_flashcards_by_session") as op:
+            op.add_metadata(session_id=session_id)
+            
+            flashcards = db.query(Flashcard).filter(Flashcard.session_id == session_id).all()
+            
+            op.add_metadata(flashcards_found=len(flashcards))
+            return flashcards
 
-            for q in questions:
-                quality_score = self.question_generator.calculate_quality_score(
-                    {"question": q.question, "answer": q.correct_answer, "explanation": q.explanation}, relevant_context
+    @handle_database_errors
+    @handle_llm_errors
+    # @validate_input(validate_question_generation_request)
+    def process_rag_quiz_and_flashcards(self, request: QuestionGenerationRequest, db: Session) -> Dict[str, Any]:
+        """ processing with comprehensive error handling and monitoring"""
+        with MonitoredOperation("process_rag_quiz_and_flashcards") as op:
+            try:
+                op.add_metadata(
+                    topic=request.topic,
+                    document_count=len(request.document_ids),
+                    quiz_count=request.quiz_count,
+                    flashcard_count=request.flashcard_count
                 )
-                question_obj = Question(
-                    content=q.question,
-                    type=q.type,
-                    difficulty_level=q.difficulty_level,
-                    topic=q.topic,
-                    correct_answer=q.correct_answer,
-                    document_id=request.document_ids[0] if request.document_ids else None,
-                    session_id=request.session_id,
-                    user_id=request.user_id,
-                    explanation=q.explanation,
-                    source_context=q.source_context,
-                    generation_model=self.question_generator.model_name,
-                    validation_score=quality_score,
-                    created_at=current_date_time(),
+                
+                relevant_context = self.vector_service.get_relevant_context(
+                    db, request.topic, request.document_ids, max_context_length=4000
                 )
-                db.add(question_obj)
-                db.flush()
+                
+                if not relevant_context.strip():
+                    raise HTTPException(status_code=400, detail="No relevant context found for the given topic")
 
-                for ans in q.answers:
-                    db.add(
-                        QuestionAnswer(
-                            content=ans.content,
-                            is_correct=ans.is_correct,
-                            explanation=ans.explanation,
-                            question_id=question_obj.id,
-                        )
+                op.add_metadata(context_length=len(relevant_context))
+                
+                questions = self.question_generator.generate_rag_quiz(
+                    request.topic, relevant_context, request.quiz_count
+                )
+                flashcards = self.question_generator.generate_rag_flashcards(
+                    request.topic, relevant_context, request.flashcard_count
+                )
+                
+                op.add_metadata(
+                    questions_generated=len(questions),
+                    flashcards_generated=len(flashcards)
+                )
+                
+                questions_data = []
+                flashcards_data = []
+                question_answers_data = []
+                
+                error_collector = ErrorCollector()
+                
+                for q in questions:
+                    question_result = safe_execute(
+                        "process_question",
+                        self._prepare_question_data,
+                        q, request,
+                        error_collector=error_collector
                     )
+                    
+                    if question_result:
+                        question_data, answers_data = question_result
+                        questions_data.append(question_data)
+                        question_answers_data.extend(answers_data)
+                
+                for f in flashcards:
+                    flashcard_result = safe_execute(
+                        "process_flashcard",
+                        self._prepare_flashcard_data,
+                        f, request,
+                        error_collector=error_collector
+                    )
+                    
+                    if flashcard_result:
+                        flashcards_data.append(flashcard_result)
+                
+                if questions_data:
+                    BatchOperations.bulk_insert_questions(db, questions_data)
+                
+                if flashcards_data:
+                    BatchOperations.bulk_insert_flashcards(db, flashcards_data)
+                
+                if question_answers_data:
+                    self._insert_question_answers(db, question_answers_data)
+                
+                session_summary = None
+                if request.session_id:
+                    try:
+                        summary_service.generate_or_update_summary(db, request.session_id, regenerate=False)
+                        session_summary = summary_service.get_session_summary(db, request.session_id)
+                        logger.info(f"Summary auto-generated/updated for session {request.session_id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to auto-generate summary for session {request.session_id}: {e}")
 
-            for f in flashcards:
-                quality_score = self.question_generator.calculate_quality_score(
-                    {"question": f.question, "answer": f.answer, "explanation": f.explanation}, relevant_context
-                )
-                flashcard_obj = Flashcard(
-                    card_type=f.card_type,
-                    question=f.question,
-                    answer=f.answer,
-                    explanation=f.explanation,
-                    topic=f.topic,
-                    source_context=f.source_context,
-                    generation_model=self.question_generator.model_name,
-                    validation_score=quality_score,
-                    document_id=request.document_ids[0] if request.document_ids else None,
-                    session_id=request.session_id,
-                    user_id=request.user_id,
-                    created_at=current_date_time(),
-                )
-                db.add(flashcard_obj)
-           
-            session_summary = None
-            if request.session_id:
-                try:
-                    summary_service.generate_or_update_summary(db, request.session_id, regenerate=False)
-                    session_summary = summary_service.get_session_summary(db, request.session_id)
-                    logger.info(f"Summary auto-generated/updated for session {request.session_id}")
-                except Exception as e:
-                    logger.warning(f"Failed to auto-generate summary for session {request.session_id}: {e}")
+                if error_collector.has_errors():
+                    error_summary = error_collector.get_summary()
+                    logger.warning(f"Processing completed with errors: {error_summary}")
+                    op.add_metadata(processing_errors=error_summary['total_errors'])
 
+                result = {
+                    "topic": request.topic,
+                    "document_ids": request.document_ids,
+                    "session_id": request.session_id,
+                    "questions": questions,
+                    "flashcards": flashcards,
+                    "summary": session_summary,
+                    "context_used": relevant_context[:200] + "..." if len(relevant_context) > 200 else relevant_context,
+                    "created_at": current_date_time(),
+                    "processing_stats": {
+                        "questions_requested": request.quiz_count,
+                        "questions_generated": len(questions),
+                        "questions_saved": len(questions_data),
+                        "flashcards_requested": request.flashcard_count,
+                        "flashcards_generated": len(flashcards),
+                        "flashcards_saved": len(flashcards_data),
+                        "errors": error_collector.get_summary() if error_collector.has_errors() else None
+                    }
+                }
+                
+                op.add_metadata(
+                    questions_saved=len(questions_data),
+                    flashcards_saved=len(flashcards_data),
+                    processing_success=True
+                )
+                
+                return result
+
+            except Exception as e:
+                op.add_metadata(processing_success=False, error=str(e))
+                traceback.print_exc()
+                raise HTTPException(status_code=500, detail=str(e))
+    def _prepare_question_data(self, q, request) -> tuple:
+        """Prepare question data for batch insertion"""
+        question_id = str(uuid.uuid4())
+        
+        quality_score = self.question_generator.calculate_quality_score(
+            {"question": q.question, "answer": q.correct_answer, "explanation": q.explanation}, 
+            q.source_context
+        )
+        
+        question_data = {
+            "id": question_id,
+            "content": q.question,
+            "type": q.type,
+            "difficulty_level": q.difficulty_level,
+            "topic": q.topic,
+            "correct_answer": q.correct_answer,
+            "session_id": request.session_id,
+            "user_id": request.user_id,
+            "explanation": q.explanation,
+            "source_context": q.source_context,
+            "generation_model": self.question_generator.model_name,
+            "validation_score": quality_score,
+            "created_at": current_date_time(),
+        }
+        
+        answers_data = []
+        for ans in q.answers:
+            answers_data.append({
+                "id": str(uuid.uuid4()),
+                "content": ans.content,
+                "is_correct": ans.is_correct,
+                "explanation": ans.explanation,
+                "question_id": question_id,
+            })
+        
+        return question_data, answers_data
+    
+    def _prepare_flashcard_data(self, f, request) -> dict:
+        """Prepare flashcard data for batch insertion"""
+        quality_score = self.question_generator.calculate_quality_score(
+            {"question": f.question, "answer": f.answer, "explanation": f.explanation}, 
+            f.source_context
+        )
+        
+        return {
+            "id": str(uuid.uuid4()),
+            "card_type": f.card_type,
+            "question": f.question,
+            "answer": f.answer,
+            "explanation": f.explanation,
+            "topic": f.topic,
+            "source_context": f.source_context,
+            "generation_model": self.question_generator.model_name,
+            "validation_score": quality_score,
+            "session_id": request.session_id,
+            "user_id": request.user_id,
+            "created_at": current_date_time(),
+        }
+    
+    def _insert_question_answers(self, db: Session, answers_data: list):
+        """Insert question answers (requires existing questions)"""
+        try:
+            from app.models import QuestionAnswer
+            db.bulk_insert_mappings(QuestionAnswer, answers_data)
             db.commit()
-
-            return {
-                "topic": request.topic,
-                "document_ids": request.document_ids,
-                "session_id": request.session_id,
-                "questions": questions,
-                "flashcards": flashcards,
-                "summary": session_summary,
-                "context_used": relevant_context[:200] + "..." if len(relevant_context) > 200 else relevant_context,
-                "created_at": current_date_time(),
-            }
-
+            logger.info(f"Inserted {len(answers_data)} question answers")
         except Exception as e:
             db.rollback()
-            traceback.print_exc()
-            raise HTTPException(status_code=500, detail=str(e))
-
-    def generate_question_from_url_service(self, request: DocumentUrlUploadRequest, db: Session):
-        try:
+            logger.error(f"Failed to insert question answers: {e}")
+            raise
             
-            url_type = detect_url_type(request.url)
-            if url_type == "youtube":
-                document = document_service.parse_youtube(db, UrlParseRequest(url=request.url, session_id=request.session_id))
-            else:
-                document = document_service.parse_web_url(db, UrlParseRequest(url=request.url, session_id=request.session_id))
-
-            document_id = str(document.id)
-            with open(document.content_file_path, "r", encoding="utf-8") as f:
-                text_content = f.read()
-
-            self.vector_service.chunk_and_embed_document(db, document_id, text_content)
-
-            return self.process_rag_quiz_and_flashcards(
-                request=QuestionGenerationRequest(
-                    topic=request.topic,
-                    document_ids=[document_id],
-                    session_id=str(document.session_id) if document.session_id else None,
-                    user_id=request.user_id,
-                    quiz_count=request.question_count,
-                    flashcard_count=request.flashcard_count,
-                ),
-                db=db,
-            )
-        except Exception as e:
-            traceback.print_exc()
-            raise HTTPException(status_code=500, detail=str(e))
-
-    def generate_question_from_file_service(self, request: DocumentFileUploadRequest, db: Session):
-        try:
-            from app.services.document_service import document_service
-            
-            file_type = detect_file_type(request.file)
-            if file_type == "audio_video":
-                document = document_service.parse_audio_video(db, FileParseRequest(file=request.file, session_id=request.session_id))
-            else:
-                document = document_service.parse_document(db, FileParseRequest(file=request.file, session_id=request.session_id))
-
-            document_id = str(document.id)
-            with open(document.content_file_path, "r", encoding="utf-8") as f:
-                text_content = f.read()
-
-            self.vector_service.chunk_and_embed_document(db, document_id, text_content)
-
-            return self.process_rag_quiz_and_flashcards(
-                request=QuestionGenerationRequest(    
-                    topic=request.topic,
-                    document_ids=[document_id],
-                    session_id=str(document.session_id) if document.session_id else None,
-                    user_id=request.user_id,
-                    quiz_count=request.question_count,
-                    flashcard_count=request.flashcard_count,
-                ),
-                db=db,
-            )
-        except Exception as e:
-            traceback.print_exc()
-            raise HTTPException(status_code=500, detail=str(e))
-
 question_service = QuestionService()

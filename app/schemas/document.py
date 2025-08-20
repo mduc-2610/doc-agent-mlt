@@ -40,6 +40,11 @@ class SessionCreateRequest(BaseModel):
     name: str
     description: Optional[str] = ""
 
+
+class SessionUpdateRequest(BaseModel):
+    name: str
+    description: Optional[str] = ""
+
 class SessionUpdateRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None

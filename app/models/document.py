@@ -1,6 +1,8 @@
+from services_monolithic.app.models.session import Session
 from sqlalchemy import Column, String, Text, DateTime, Integer, ForeignKey, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
+from sqlalchemy import event
 from pgvector.sqlalchemy import Vector
 import uuid
 from app.config import current_date_time
@@ -63,3 +65,20 @@ class DocumentSummary(Base):
     original_word_count = Column(Integer, nullable=False)
     summary_word_count = Column(Integer)
     created_at = Column(DateTime, default=current_date_time)
+
+
+@event.listens_for(Document, "after_insert")
+def after_document_insert(mapper, connection, target: Document):
+    connection.execute(
+        Session.__table__.update()
+        .where(Session.id == target.session_id)
+        .values(total_documents=Session.total_documents + 1)
+    )
+
+@event.listens_for(Document, "after_delete")
+def after_document_delete(mapper, connection, target: Document):
+    connection.execute(
+        Session.__table__.update()
+        .where(Session.id == target.session_id)
+        .values(total_documents=Session.total_documents - 1)
+    )

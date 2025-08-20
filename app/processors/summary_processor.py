@@ -18,7 +18,6 @@ class SummaryProcessor:
         self.max_tokens = 4000
 
     def save_summary_to_file(self, summary_content: str, summary_id: str) -> str:
-        """Save summary content to file and return file path"""
         os.makedirs(settings.summary_files_dir, exist_ok=True)
         file_path = os.path.join(settings.summary_files_dir, f"{summary_id}.txt")
         with open(file_path, 'w', encoding='utf-8') as f:

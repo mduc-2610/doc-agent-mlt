@@ -8,3 +8,5 @@ app.log
 **/content_files
 **/source_files
 **/summary_files
+**/cache
+**/document_files
