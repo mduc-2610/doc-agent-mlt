@@ -1,6 +1,6 @@
 from .document import *
 from .question import *
-from .generation import *
+from .tutor import *
 
 __all__ = [
     "SessionResponse", "DocumentResponse", "SessionDetailResponse",
@@ -8,8 +8,6 @@ __all__ = [
     "FileParseRequest", "MessageResponse", "FlashcardResponse",
     "QuestionAnswerResponse", "QuestionResponse", "DocumentUploadBase",
     "DocumentFileUploadRequest", "DocumentUrlUploadRequest",
-    "QuestionGenerationRequest", "ReviewRequest", 
-
-    "QuestionAnswerData", "QuestionData", "FlashcardData",
-    "QuestionValidator", "FlashcardValidator"
+    "QuestionGenerationRequest", "ReviewRequest",
+    "TutorChatRequest", "TutorChatResponse", "TutorExplainRequest", "TutorExplainResponse"
 ]

@@ -147,34 +147,27 @@ Provide a JSON object with:
 - "missing_context": Important context information not reflected in the generated content
 """
 
-HUMAN_REVIEW_TEMPLATE = """
-QUESTION GENERATION BATCH FOR REVIEW
+TUTOR_SYSTEM_PROMPT = (
+"You are a helpful, rigorous RAG Tutor. Answer using the Provided Context first, "
+"and bring in general knowledge ONLY to fill gaps. When you use Provided Context, "
+"cite the source tag like [S1], [S2]. If the context is insufficient, say so explicitly. "
+"Be concise, use bullet points for clarity, show key steps or formulas without verbose chain-of-thought. "
+"Never fabricate citations."
+)
 
-Topic: {topic}
-Generated: {created_at}
-Model: {model_version}
-Status: {status}
 
-CONTEXT USED:
-{context}
-
-GENERATED QUESTIONS ({question_count} total):
-{questions}
-
-QUALITY METRICS:
-- Average validation score: {avg_score}
-- High quality questions (score > 8): {high_quality_count}
-- Questions needing review (score < 6): {low_quality_count}
-
-REVIEW ACTIONS:
-[ ] Approve all questions
-[ ] Approve selected questions (specify IDs: _______)
-[ ] Reject batch and regenerate
-[ ] Request modifications
-
-REVIEWER NOTES:
-_________________________________________________
-_________________________________________________
-
-Reviewer: _________________ Date: _____________
-"""
+TUTOR_USER_PROMPT_TEMPLATE = (
+"Topic: {topic}\n"
+"Current Item Type: {item_type}\n"
+"Current Item: {item_text}\n\n"
+"Student Message: {message}\n\n"
+"Provided Context (cite as [S1], [S2], ...):\n{sources_block}\n\n"
+"Instructions:\n"
+"1) Focus on the question and the student's message.\n"
+"2) Prefer grounded facts from the Provided Context.\n"
+"3) If you must use general knowledge, add '(general)' within that bullet.\n"
+"4) Keep it brief but helpful. Include a short 'Why this matters' or 'Key idea' if useful.\n"
+"5) Offer a couple of follow-up suggestions (not questions-only—could be practice ideas).\n\n"
+"Respond ONLY as valid minified JSON with keys: \n"
+"{{'reply': str, 'citations': [{{'tag': str, 'doc_id': str, 'filename': str}}], 'next_suggestions': [str]}}\n"
+)
