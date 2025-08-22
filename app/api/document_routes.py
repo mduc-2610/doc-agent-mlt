@@ -58,6 +58,18 @@ async def delete_session(session_id: str, db: Session = Depends(get_db)):
     document_service.delete_session(db, session_id)
     return MessageResponse(message="Deleted successfully")
 
+
+@router.get("/documents", response_model=List[DocumentResponse])
+async def get_documents(db: Session = Depends(get_db)):
+    docs = document_service.get_documents(db)
+    return [DocumentResponse.model_validate(d) for d in docs]
+
+@router.get("/documents/session/{session_id}", response_model=List[DocumentResponse])
+async def get_documents_by_session(session_id: str, db: Session = Depends(get_db)):
+    docs = document_service.get_documents_by_session(db, session_id)
+    return [DocumentResponse.model_validate(d) for d in docs]
+
+
 @router.post("/document", response_model=DocumentResponse)
 async def parse_document(
     request: FileParseRequest = Depends(as_form(FileParseRequest)),
@@ -91,29 +103,4 @@ async def get_document(document_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Document not found")
 
     return DocumentResponse.model_validate(doc)
-
-@router.post("/documents/{document_id}/complete")
-async def complete_document_processing(document_id: str, db: Session = Depends(get_db)):
-    """Complete document processing by creating embeddings"""
-    try:
-        document = document_service.complete_document_processing(db, document_id)
-        return {
-            "message": "Document processing completed successfully",
-            "document_id": document_id,
-            "processing_status": document.processing_status
-        }
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail="An error occurred while completing document processing")
         
-@router.get("/documents", response_model=List[DocumentResponse])
-async def get_documents(db: Session = Depends(get_db)):
-    docs = document_service.get_documents(db)
-    return [DocumentResponse.model_validate(d) for d in docs]
-
-@router.get("/documents/session/{session_id}", response_model=List[DocumentResponse])
-async def get_documents_by_session(session_id: str, db: Session = Depends(get_db)):
-    docs = document_service.get_documents_by_session(db, session_id)
-    return [DocumentResponse.model_validate(d) for d in docs]

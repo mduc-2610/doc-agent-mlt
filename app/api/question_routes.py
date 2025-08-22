@@ -36,14 +36,7 @@ async def batch_generate_questions(
     request: QuestionGenerationRequest,
     db: Session = Depends(get_db)
 ):
-    """Generate questions and flashcards from existing documents"""
     return question_service.process_rag_quiz_and_flashcards(request, db)
-
-@router.get("/stats")
-async def get_generation_stats():
-    """Get question generation statistics"""
-    from app.processors.question_generator import question_generator
-    return question_generator.get_generation_stats()
 
 @router.post("/cache/clear")
 async def clear_generation_cache():

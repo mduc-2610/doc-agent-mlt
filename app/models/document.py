@@ -1,4 +1,4 @@
-from services_monolithic.app.models.session import Session
+from app.models.session import Session
 from sqlalchemy import Column, String, Text, DateTime, Integer, ForeignKey, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship

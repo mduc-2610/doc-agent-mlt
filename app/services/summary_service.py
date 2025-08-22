@@ -16,11 +16,9 @@ class SummaryService:
         self.summary_processor = summary_processor
 
     def get_session_summary(self, db: Session, session_id: str) -> Optional[SessionSummary]:
-        """Get existing summary for a session"""
         return db.query(SessionSummary).filter(SessionSummary.session_id == session_id).first()
 
     def get_session_documents_content(self, db: Session, session_id: str) -> List[str]:
-        """Get all document contents for a session"""
         documents = db.query(Document).filter(
             Document.session_id == session_id,
             Document.processing_status == "completed"

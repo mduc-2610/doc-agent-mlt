@@ -1,128 +1,84 @@
-# app/processors/vector_processor.py
+# app/processors/vector_processor.py - Simplified vector processor
 import numpy as np
 import hashlib
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 from sentence_transformers import SentenceTransformer
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from app.models import DocumentChunk, Document
+from app.models import DocumentChunk
 from app.processors.chunk_processor import chunk_processor
-from app.services.caching_service import caching_service
 from app.config import settings
 import traceback
 import logging
 import uuid
-import re
-from collections import Counter
-import math
 
 logger = logging.getLogger(__name__)
 
-class HybridSearchProcessor:
-    """Combines semantic and keyword search for better retrieval"""
+class SimpleCache:
     
-    def __init__(self):
-        self.stop_words = {
-            'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 
-            'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-            'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-            'should', 'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those'
-        }
+    def __init__(self, max_size: int = 1000):
+        self.cache = {}
+        self.max_size = max_size
     
-    def preprocess_text(self, text: str) -> List[str]:
-        """Preprocess text for keyword matching"""
-        # Convert to lowercase and split
-        words = re.findall(r'\b\w+\b', text.lower())
-        # Remove stop words
-        return [word for word in words if word not in self.stop_words and len(word) > 2]
+    def get(self, key: str):
+        return self.cache.get(key)
     
-    def calculate_bm25_score(self, query_terms: List[str], doc_terms: List[str], 
-                           corpus_stats: Dict[str, Any]) -> float:
-        """Calculate BM25 score for keyword matching"""
-        k1, b = 1.5, 0.75  # BM25 parameters
-        
-        doc_len = len(doc_terms)
-        avg_doc_len = corpus_stats.get('avg_doc_length', doc_len)
-        
-        score = 0.0
-        doc_term_freq = Counter(doc_terms)
-        
-        for term in query_terms:
-            if term in doc_term_freq:
-                tf = doc_term_freq[term]
-                # Simple IDF approximation (in production, calculate from corpus)
-                idf = math.log(corpus_stats.get('total_docs', 1000) / 
-                             max(corpus_stats.get(f'term_freq_{term}', 1), 1))
-                
-                numerator = tf * (k1 + 1)
-                denominator = tf + k1 * (1 - b + b * (doc_len / avg_doc_len))
-                score += idf * (numerator / denominator)
-        
-        return score
+    def set(self, key: str, value):
+        if len(self.cache) >= self.max_size:
+            # Remove oldest item (simple FIFO)
+            self.cache.pop(next(iter(self.cache)))
+        self.cache[key] = value
     
-    def hybrid_score(self, semantic_score: float, keyword_score: float, 
-                    alpha: float = 0.7) -> float:
-        """Combine semantic and keyword scores"""
-        return alpha * semantic_score + (1 - alpha) * keyword_score
+    def clear(self):
+        self.cache.clear()
 
 class VectorProcessor:
     def __init__(self, model_name: str = None):
         self.model_name = model_name or settings.rag.embedding_model_name
         self.model = SentenceTransformer(self.model_name)
-        self.embedding_dimension = settings.rag.embedding_dimension
-        self.hybrid_search = HybridSearchProcessor()
+        self.embedding_cache = SimpleCache(max_size=5000)
         self.batch_size = settings.rag.embedding_batch_size
     
     def _hash_content(self, content: str) -> str:
-        """Create hash for content caching"""
         return hashlib.md5(content.encode('utf-8')).hexdigest()
     
     def create_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """Create embeddings with caching and batch processing"""
         try:
             if not texts:
                 return []
             
-            # Check cache for existing embeddings
-            cached_embeddings = {}
-            uncached_texts = []
+            embeddings = []
+            texts_to_embed = []
+            text_indices = []
             
             for i, text in enumerate(texts):
-                cached_embedding = caching_service.get_embedding(text)
-                if cached_embedding is not None:
-                    cached_embeddings[i] = cached_embedding
+                cache_key = self._hash_content(text)
+                cached = self.embedding_cache.get(cache_key)
+                if cached is not None:
+                    embeddings.append((i, cached))
                 else:
-                    uncached_texts.append((i, text))
+                    texts_to_embed.append(text)
+                    text_indices.append(i)
             
-            # Generate embeddings for uncached texts in batches
-            if uncached_texts:
-                indices, texts_to_embed = zip(*uncached_texts)
+            if texts_to_embed:
+                logger.info(f"Generating embeddings for {len(texts_to_embed)} texts")
                 
-                logger.info(f"Generating embeddings for {len(texts_to_embed)} uncached texts")
+                new_embeddings = self.model.encode(
+                    texts_to_embed, 
+                    normalize_embeddings=True,
+                    batch_size=self.batch_size,
+                    show_progress_bar=False
+                ).tolist()
                 
-                # Process in batches for memory efficiency
-                new_embeddings = []
-                for i in range(0, len(texts_to_embed), self.batch_size):
-                    batch = texts_to_embed[i:i + self.batch_size]
-                    
-                    batch_embeddings = self.model.encode(
-                        batch, 
-                        normalize_embeddings=True,
-                        batch_size=len(batch),
-                        show_progress_bar=False
-                    )
-                    new_embeddings.extend(batch_embeddings.tolist())
+                for text, embedding in zip(texts_to_embed, new_embeddings):
+                    cache_key = self._hash_content(text)
+                    self.embedding_cache.set(cache_key, embedding)
                 
-                # Cache new embeddings
-                for idx, (original_idx, text) in enumerate(uncached_texts):
-                    embedding = new_embeddings[idx]
-                    caching_service.set_embedding(text, embedding)
-                    cached_embeddings[original_idx] = embedding
+                for i, embedding in zip(text_indices, new_embeddings):
+                    embeddings.append((i, embedding))
             
-            # Return embeddings in original order
-            result = [cached_embeddings[i] for i in range(len(texts))]
-            logger.info(f"Generated/retrieved {len(result)} embeddings")
-            return result
+            embeddings.sort(key=lambda x: x[0])
+            return [emb for _, emb in embeddings]
             
         except Exception as e:
             logger.error(f"Error creating embeddings: {e}")
@@ -130,7 +86,7 @@ class VectorProcessor:
             raise
     
     def chunk_and_embed_document(self, db: Session, document_id: str, text_content: str) -> List[DocumentChunk]:
-        """ chunking and embedding with better error handling"""
+        """Create chunks and embeddings for a document"""
         try:
             logger.info(f"Processing document {document_id} with {len(text_content)} characters")
             
@@ -140,7 +96,7 @@ class VectorProcessor:
             ).first()
             
             if existing_chunks:
-                logger.info(f"Document {document_id} already has chunks, skipping")
+                logger.info(f"Document {document_id} already has chunks")
                 return db.query(DocumentChunk).filter(
                     DocumentChunk.document_id == document_id
                 ).all()
@@ -155,13 +111,11 @@ class VectorProcessor:
             
             logger.info(f"Created {len(chunks)} chunks for document {document_id}")
             
-            # Create embeddings in batches
             embeddings = self.create_embeddings(chunks)
             
             if len(embeddings) != len(chunks):
                 raise ValueError(f"Embedding count {len(embeddings)} doesn't match chunk count {len(chunks)}")
             
-            # Create chunk objects
             chunk_objects = []
             for i, (chunk_text, embedding) in enumerate(zip(chunks, embeddings)):
                 chunk_obj = DocumentChunk(
@@ -179,7 +133,6 @@ class VectorProcessor:
                 )
                 chunk_objects.append(chunk_obj)
             
-            # Batch insert for better performance
             db.bulk_insert_mappings(DocumentChunk, [
                 {
                     "id": chunk.id,
@@ -195,7 +148,7 @@ class VectorProcessor:
             ])
             
             db.commit()
-            logger.info(f"Successfully created {len(chunk_objects)} chunks with embeddings for document {document_id}")
+            logger.info(f"Successfully created {len(chunk_objects)} chunks with embeddings")
             return chunk_objects
             
         except Exception as e:
@@ -204,26 +157,16 @@ class VectorProcessor:
             traceback.print_exc()
             raise
     
-    def hybrid_similarity_search(self, db: Session, query: str, document_ids: List[str] = None, 
-                                top_k: int = 10) -> List[Dict[str, Any]]:
-        """ similarity search with hybrid semantic + keyword matching"""
+    def similarity_search(self, db: Session, query: str, document_ids: List[str] = None, 
+                         top_k: int = 10) -> List[Dict[str, Any]]:
+        """Perform similarity search using cosine similarity"""
         try:
             if not query.strip():
-                logger.warning("Empty query provided to similarity search")
+                logger.warning("Empty query provided")
                 return []
-            
-            # Check cache first
-            context_hash = self._hash_content(str(document_ids) if document_ids else "all")
-            cache_key = f"{query}:{context_hash}"
-            
-            cached_result = caching_service.get_query_result(query, context_hash)
-            if cached_result is not None:
-                logger.info("Retrieved search results from cache")
-                return cached_result
             
             # Create query embedding
             query_embedding = self.create_embeddings([query])[0]
-            query_terms = self.hybrid_search.preprocess_text(query)
             
             # Build similarity query
             similarity_query = """
@@ -234,7 +177,7 @@ class VectorProcessor:
                     content,
                     word_count,
                     extra_metadata,
-                    1 - (embedding <=> :query_embedding) as semantic_score
+                    1 - (embedding <=> :query_embedding) as similarity_score
                 FROM document_chunks 
             """
             
@@ -246,136 +189,42 @@ class VectorProcessor:
                 for i, doc_id in enumerate(document_ids):
                     params[f'doc_id_{i}'] = doc_id
             
-            similarity_query += f" ORDER BY semantic_score DESC LIMIT :top_k_extended"
-            params["top_k_extended"] = min(top_k * 3, 50)  # Get more candidates for re-ranking
+            similarity_query += f" ORDER BY similarity_score DESC LIMIT :top_k"
+            params["top_k"] = top_k
             
             result = db.execute(text(similarity_query), params)
             results = result.fetchall()
             
-            if not results:
-                logger.warning("No results found for similarity search")
-                return []
-            
-            # Calculate hybrid scores
             search_results = []
-            corpus_stats = self._get_corpus_stats(db, document_ids)
-            
             for row in results:
-                semantic_score = float(row.semantic_score)
-                
-                # Calculate keyword score
-                doc_terms = self.hybrid_search.preprocess_text(row.content)
-                keyword_score = self.hybrid_search.calculate_bm25_score(
-                    query_terms, doc_terms, corpus_stats
-                )
-                
-                # Normalize keyword score (simple min-max normalization)
-                keyword_score = min(keyword_score / 10.0, 1.0)  # Rough normalization
-                
-                # Combine scores
-                hybrid_score = self.hybrid_search.hybrid_score(semantic_score, keyword_score)
-                
-                search_results.append({
-                    "id": str(row.id),
-                    "document_id": str(row.document_id),
-                    "chunk_index": row.chunk_index,
-                    "content": row.content,
-                    "word_count": row.word_count,
-                    "extra_metadata": row.extra_metadata,
-                    "semantic_score": semantic_score,
-                    "keyword_score": keyword_score,
-                    "hybrid_score": hybrid_score
-                })
+                if row.similarity_score >= settings.rag.similarity_threshold:
+                    search_results.append({
+                        "id": str(row.id),
+                        "document_id": str(row.document_id),
+                        "chunk_index": row.chunk_index,
+                        "content": row.content,
+                        "word_count": row.word_count,
+                        "extra_metadata": row.extra_metadata,
+                        "similarity_score": float(row.similarity_score)
+                    })
             
-            # Sort by hybrid score and apply diversity filtering
-            search_results.sort(key=lambda x: x['hybrid_score'], reverse=True)
-            diversified_results = self._diversify_results(search_results, top_k)
-            
-            # Cache results
-            caching_service.set_query_result(query, context_hash, diversified_results)
-            
-            logger.info(f"Hybrid search returned {len(diversified_results)} results for query: {query[:50]}...")
-            return diversified_results
+            logger.info(f"Similarity search returned {len(search_results)} results")
+            return search_results
             
         except Exception as e:
-            logger.error(f"Error in hybrid similarity search: {e}")
+            logger.error(f"Error in similarity search: {e}")
             traceback.print_exc()
             return []
     
-    def _get_corpus_stats(self, db: Session, document_ids: List[str] = None) -> Dict[str, Any]:
-        """Get corpus statistics for BM25 calculation"""
-        try:
-            if document_ids:
-                placeholders = ','.join([f"'{doc_id}'" for doc_id in document_ids])
-                query = f"""
-                    SELECT AVG(word_count) as avg_length, COUNT(*) as total_docs
-                    FROM document_chunks 
-                    WHERE document_id IN ({placeholders})
-                """
-            else:
-                query = """
-                    SELECT AVG(word_count) as avg_length, COUNT(*) as total_docs
-                    FROM document_chunks
-                """
-            
-            result = db.execute(text(query)).fetchone()
-            
-            return {
-                "avg_doc_length": float(result.avg_length) if result.avg_length else 100,
-                "total_docs": int(result.total_docs) if result.total_docs else 1
-            }
-        except Exception as e:
-            logger.warning(f"Failed to get corpus stats: {e}")
-            return {"avg_doc_length": 100, "total_docs": 1}
-    
-    def _diversify_results(self, results: List[Dict], target_count: int) -> List[Dict]:
-        """Apply diversity filtering to reduce redundant results"""
-        if len(results) <= target_count:
-            return results
-        
-        diversified = [results[0]]  # Always include top result
-        diversity_threshold = settings.rag.diversity_threshold
-        
-        for candidate in results[1:]:
-            if len(diversified) >= target_count:
-                break
-            
-            is_diverse = True
-            for selected in diversified:
-                similarity = self._calculate_content_similarity(
-                    candidate["content"], selected["content"]
-                )
-                if similarity > diversity_threshold:
-                    is_diverse = False
-                    break
-            
-            if is_diverse:
-                diversified.append(candidate)
-        
-        return diversified
-    
-    def _calculate_content_similarity(self, content1: str, content2: str) -> float:
-        """Calculate simple content similarity for diversity filtering"""
-        words1 = set(self.hybrid_search.preprocess_text(content1))
-        words2 = set(self.hybrid_search.preprocess_text(content2))
-        
-        if not words1 or not words2:
-            return 0.0
-        
-        intersection = len(words1.intersection(words2))
-        union = len(words1.union(words2))
-        
-        return intersection / union if union > 0 else 0.0
-    
     def get_relevant_context(self, db: Session, topic: str, document_ids: List[str] = None, 
                            max_context_length: int = None) -> str:
-        """ context retrieval with better aggregation"""
+        """Get relevant context for a topic"""
         try:
             if max_context_length is None:
                 max_context_length = settings.rag.max_context_length
             
-            # Use hybrid search for better retrieval
-            search_results = self.hybrid_similarity_search(
+            # Use similarity search
+            search_results = self.similarity_search(
                 db, topic, document_ids, top_k=settings.rag.retrieval_top_k
             )
             
@@ -383,22 +232,11 @@ class VectorProcessor:
                 logger.warning(f"No relevant context found for topic: {topic}")
                 return ""
             
-            # Filter by similarity threshold
-            filtered_results = [
-                result for result in search_results 
-                if result['hybrid_score'] >= settings.rag.similarity_threshold
-            ]
-            
-            if not filtered_results:
-                logger.warning(f"No results above similarity threshold for topic: {topic}")
-                # Fall back to top result if nothing passes threshold
-                filtered_results = search_results[:1]
-            
-            # Aggregate context with smart truncation
+            # Aggregate context
             context_parts = []
             current_length = 0
             
-            for result in filtered_results:
+            for result in search_results:
                 content = result['content'].strip()
                 content_length = len(content)
                 
@@ -406,15 +244,14 @@ class VectorProcessor:
                     context_parts.append(content)
                     current_length += content_length
                 else:
-                    # Try to fit a truncated version
+                    # Try to fit truncated version
                     remaining_space = max_context_length - current_length
-                    if remaining_space > 100:  # Only if meaningful space left
+                    if remaining_space > 100:
                         truncated = content[:remaining_space - 3] + "..."
                         context_parts.append(truncated)
                     break
             
             context = "\n\n".join(context_parts)
-            
             logger.info(f"Retrieved context of {len(context)} characters from {len(context_parts)} chunks")
             return context
             
@@ -422,18 +259,20 @@ class VectorProcessor:
             logger.error(f"Error getting relevant context: {e}")
             traceback.print_exc()
             return ""
-
-    def similarity_search(self, db: Session, query: str, document_id: str = None, top_k: int = 5) -> List[Dict[str, Any]]:
-        """Backward compatibility wrapper for existing similarity_search calls"""
-        document_ids = [document_id] if document_id else None
-        return self.hybrid_similarity_search(db, query, document_ids, top_k)
     
     def get_cache_stats(self) -> Dict[str, Any]:
-        """Get caching statistics"""
-        return caching_service.get_stats()
+        """Get cache statistics"""
+        return {
+            "cache_size": len(self.embedding_cache.cache),
+            "max_cache_size": self.embedding_cache.max_size,
+            "model_name": self.model_name
+        }
     
-    def cleanup_cache(self) -> Dict[str, int]:
-        """Cleanup expired cache entries"""
-        return caching_service.cleanup()
+    def cleanup_cache(self) -> int:
+        """Clear cache and return number of entries cleared"""
+        cache_size = len(self.embedding_cache.cache)
+        self.embedding_cache.clear()
+        logger.info(f"Cleared {cache_size} cached embeddings")
+        return cache_size
 
 vector_processor = VectorProcessor()
