@@ -10,7 +10,6 @@ from app.config import current_date_time
 from app.processors.question_generator import question_generator
 from app.schemas.question import QuestionGenerationRequest
 from app.processors.vector_processor import vector_processor
-from app.services.summary_service import summary_service
 from app.database import bulk_insert_questions, bulk_insert_flashcards
 
 logger = logging.getLogger(__name__)

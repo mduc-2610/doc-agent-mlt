@@ -24,11 +24,11 @@ class Document(Base):
     created_at = Column(DateTime, default=current_date_time)
     updated_at = Column(DateTime, default=current_date_time, onupdate=current_date_time)
 
-class SessionSummary(Base):
-    __tablename__ = "session_summaries"
+class DocumentSummary(Base):
+    __tablename__ = "document_summaries"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id"), nullable=False, unique=True)
+    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=False, unique=True)
     summary_content = Column(Text, nullable=False)
     document_count = Column(Integer, nullable=False, default=0)
     total_word_count = Column(Integer, nullable=False, default=0)
@@ -37,10 +37,10 @@ class SessionSummary(Base):
     summary_file_path = Column(String(500), nullable=False)
     created_at = Column(DateTime, default=current_date_time)
     updated_at = Column(DateTime, default=current_date_time, onupdate=current_date_time)
-    
-    # Relationship to session
-    session = relationship("Session", backref="summary")
-    
+
+    # Relationship to document
+    document = relationship("Document", backref="summary")
+
 class DocumentChunk(Base):
     __tablename__ = "document_chunks"
     
@@ -54,18 +54,6 @@ class DocumentChunk(Base):
     created_at = Column(DateTime, default=current_date_time)
     
     document = relationship("Document", backref="chunks")
-
-class DocumentSummary(Base):
-    __tablename__ = "document_summaries"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    document_id = Column(UUID(as_uuid=True), nullable=False)
-    summary_file_path = Column(String(500))
-    model_used = Column(String(100))
-    original_word_count = Column(Integer, nullable=False)
-    summary_word_count = Column(Integer)
-    created_at = Column(DateTime, default=current_date_time)
-
 
 @event.listens_for(Document, "after_insert")
 def after_document_insert(mapper, connection, target: Document):

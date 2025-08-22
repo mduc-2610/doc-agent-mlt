@@ -6,7 +6,7 @@ import logging
 from contextlib import asynccontextmanager
 import sys
 from app.database import init_db, get_db
-from app.api import document_routes, question_routes, summary_routes
+from app.api import document_routes, question_routes
 from app.config import settings
 from app.processors.vector_processor import vector_processor
 from app.database import SessionLocal
@@ -67,7 +67,6 @@ app.add_middleware(
 )
 app.include_router(document_routes.router, prefix="/document", tags=["📄 Document Processing"])
 app.include_router(question_routes.router, prefix="/question", tags=["❓ Quiz & Flashcard Generation"])
-app.include_router(summary_routes.router, prefix="/summary", tags=["📝 Content Summarization"])
 
 @app.get("/health")
 async def health_check():
@@ -102,6 +101,4 @@ async def clear_cache():
         return {"error": str(e)}
 
 if __name__ == "__main__":
-    uvicorn.run(
-        "main:app", host="0.0.0.0", port=9000,reload=True, workers=1, access_log=True, 
-    )
+    uvicorn.run("main:app", host="0.0.0.0", port=9000,reload=True, workers=1, access_log=True)
