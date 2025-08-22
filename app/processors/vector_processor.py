@@ -1,4 +1,3 @@
-# app/processors/vector_processor.py - Simplified vector processor
 import numpy as np
 import hashlib
 from typing import List, Dict, Any, Optional

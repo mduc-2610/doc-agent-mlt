@@ -9,8 +9,7 @@ class VectorService:
         self.vector_processor = vector_processor
     
     def get_relevant_context(self, db, topic: str, document_ids: list = None, max_context_length: int = 4000) -> str:
-            return  self.vector_processor.get_relevant_context(db, topic, document_ids, max_context_length)
-           
+        return  self.vector_processor.get_relevant_context(db, topic, document_ids, max_context_length)
     
     def chunk_and_embed_document(self, db, document_id: str, text_content: str):
         return self.vector_processor.chunk_and_embed_document(db, document_id, text_content)

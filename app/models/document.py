@@ -38,7 +38,6 @@ class DocumentSummary(Base):
     created_at = Column(DateTime, default=current_date_time)
     updated_at = Column(DateTime, default=current_date_time, onupdate=current_date_time)
 
-    # Relationship to document
     document = relationship("Document", backref="summary")
 
 class DocumentChunk(Base):

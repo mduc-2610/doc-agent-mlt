@@ -1,4 +1,3 @@
-# app/processors/question_generator.py - Simplified question generator
 import json
 import re
 from openai import OpenAI

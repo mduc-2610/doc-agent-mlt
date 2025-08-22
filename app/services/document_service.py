@@ -1,4 +1,3 @@
-# app/services/document_service.py - Simplified document service
 import uuid
 import os
 import traceback

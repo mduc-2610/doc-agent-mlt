@@ -1,4 +1,3 @@
-# app/services/question_service.py - Simplified question service
 import uuid
 import traceback
 from sqlalchemy.orm import Session, joinedload

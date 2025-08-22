@@ -6,7 +6,11 @@ import logging
 from contextlib import asynccontextmanager
 import sys
 from app.database import init_db, get_db
-from app.api import document_routes, question_routes
+from app.api import (
+    document_routes, 
+    question_routes,
+    explain_routes,
+)
 from app.config import settings
 from app.processors.vector_processor import vector_processor
 from app.database import SessionLocal
@@ -65,8 +69,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.include_router(document_routes.router, prefix="/document", tags=["📄 Document Processing"])
-app.include_router(question_routes.router, prefix="/question", tags=["❓ Quiz & Flashcard Generation"])
+app.include_router(document_routes.router, prefix="/document", tags=["Document Processing"])
+app.include_router(question_routes.router, prefix="/question", tags=["Quiz & Flashcard Generation"])
+app.include_router(explain_routes.router, prefix="/explain", tags=["Explanation Generation"])
+
+
 
 @app.get("/health")
 async def health_check():
