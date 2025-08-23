@@ -38,7 +38,6 @@ class TutorService:
         self.agent = TutorAgent()
         self.vector = vector_processor
 
-    # ---- public API ----
     def explain_question(self, db: OrmSession, question_id: str, user_message: str, top_k: int = 6) -> TutorExplainResponse:
         q: Optional[Question] = (
             db.query(Question)
@@ -67,7 +66,6 @@ class TutorService:
         )
 
     def chat(self, db: OrmSession, req: TutorChatRequest) -> TutorChatResponse:
-        # Identify base prompt item
         item_text = ""
         item_type = "chat"
         topic = "General"
@@ -87,8 +85,6 @@ class TutorService:
             item_type = f.card_type or "flashcard"
             topic = f.topic or topic
         else:
-            # Pure chat within a session/topic
-            # try to infer topic from recent questions in the session
             recent_q = (
                 db.query(Question)
                 .filter(Question.session_id == req.session_id)
@@ -98,7 +94,6 @@ class TutorService:
             if recent_q:
                 topic = recent_q.topic or topic
 
-        # documents to consider
         if req.document_ids:
             doc_ids = req.document_ids
         else:
@@ -115,11 +110,9 @@ class TutorService:
             next_suggestions=ctx_pack["next_suggestions"],
         )
 
-    # ---- internals ----
     def _build_user_message(self, req: TutorChatRequest) -> str:
         pieces: List[str] = []
         if req.history:
-            # keep a compact summary of the last few messages
             last = req.history[-6:]
             for turn in last:
                 pieces.append(f"{turn.role}: {turn.content}")
@@ -137,20 +130,16 @@ class TutorService:
         document_ids: List[str],
         top_k: int,
     ) -> Dict[str, Any]:
-        # Compose a retrieval query blending the item and the current message
         retrieval_query = (item_text or "") + "\n" + (user_message or "")
         results = self.vector.similarity_search(db, retrieval_query, document_ids=document_ids, top_k=top_k)
 
-        # Build sources block
         sources_lines: List[str] = []
         citations: List[Dict[str, str]] = []
         for idx, r in enumerate(results, start=1):
             tag = f"S{idx}"
-            # fetch filename for more meaningful citation
             doc = db.query(Document).filter(Document.id == r["document_id"]).first()
             filename = doc.filename if doc else r["document_id"]
             content = (r["content"] or "").strip().replace("\n", " ")
-            # Clip long chunks to keep prompts efficient
             if len(content) > 750:
                 content = content[:750] + " …"
             sources_lines.append(f"[{tag}] (doc: {filename})\n{content}")
@@ -161,7 +150,6 @@ class TutorService:
 
         sources_block = "\n\n".join(sources_lines)
 
-        # Provide a couple of default next suggestions; model may augment
         next_suggestions = [
             "Try a similar practice question.",
             "Ask for a step-by-step outline of the solution approach.",
@@ -194,11 +182,9 @@ class TutorService:
             data = json.loads(cleaned)
         except Exception as e:
             logger.warning(f"JSON parsing failed; returning raw text. Error: {e}")
-            # Fallback shape
             return cleaned, ctx_pack["citations"]
 
         reply = data.get("reply") or "(No reply)"
-        # if model produced its own citations block, prefer it but validate tags
         model_citations = data.get("citations") or []
         valid_tags = {c["tag"] for c in ctx_pack["citations"]}
         filtered = []
@@ -206,7 +192,6 @@ class TutorService:
             try:
                 tag = c.get("tag")
                 if tag in valid_tags:
-                    # merge filename/doc_id from our records for consistency
                     base = next(x for x in ctx_pack["citations"] if x["tag"] == tag)
                     filtered.append(base)
             except Exception:
@@ -214,7 +199,6 @@ class TutorService:
         if not filtered:
             filtered = ctx_pack["citations"]
 
-        # allow the model to include next suggestions; otherwise keep defaults
         if data.get("next_suggestions"):
             ctx_pack["next_suggestions"] = data["next_suggestions"]
 

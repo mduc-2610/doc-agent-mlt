@@ -13,12 +13,10 @@ engine = create_engine(
     pool_timeout=settings.database.pool_timeout,
     pool_recycle=settings.database.pool_recycle,
     echo=settings.database.echo,
-    # Performance optimizations
-    pool_pre_ping=True,  # Verify connections before use
-    pool_reset_on_return='commit',  # Reset connections on return
+    pool_pre_ping=True,  
+    pool_reset_on_return='commit',  
 )
 
-# Enhanced session factory
 SessionLocal = sessionmaker(
     autocommit=False, 
     autoflush=False, 

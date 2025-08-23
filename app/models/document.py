@@ -1,12 +1,13 @@
 from app.models.session import Session
 from sqlalchemy import Column, String, Text, DateTime, Integer, ForeignKey, JSON
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
 from sqlalchemy import event
 from pgvector.sqlalchemy import Vector
 import uuid
 from app.config import current_date_time
 from .base import Base
+
 
 class Document(Base):
     __tablename__ = "documents"
@@ -20,15 +21,20 @@ class Document(Base):
     content_file_path = Column(String(500))
     source_file_path = Column(String(500))
     text_length = Column(Integer, default=0)
-    session_id = Column(UUID(as_uuid=True))
+    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime, default=current_date_time)
     updated_at = Column(DateTime, default=current_date_time, onupdate=current_date_time)
+
+    session = relationship("Session", back_populates="documents")
+    summary = relationship("DocumentSummary", back_populates="document", uselist=False, cascade="all, delete-orphan")
+    chunks = relationship("DocumentChunk", back_populates="document", cascade="all, delete-orphan")
+
 
 class DocumentSummary(Base):
     __tablename__ = "document_summaries"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=False, unique=True)
+    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, unique=True)
     summary_content = Column(Text, nullable=False)
     document_count = Column(Integer, nullable=False, default=0)
     total_word_count = Column(Integer, nullable=False, default=0)
@@ -38,21 +44,25 @@ class DocumentSummary(Base):
     created_at = Column(DateTime, default=current_date_time)
     updated_at = Column(DateTime, default=current_date_time, onupdate=current_date_time)
 
-    document = relationship("Document", backref="summary")
+    document = relationship("Document", back_populates="summary")
+
 
 class DocumentChunk(Base):
     __tablename__ = "document_chunks"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=False)
+    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
     chunk_index = Column(Integer, nullable=False)
     content = Column(Text, nullable=False)
     word_count = Column(Integer, nullable=False)
     embedding = Column(Vector(1024))  
     extra_metadata = Column(JSON)
     created_at = Column(DateTime, default=current_date_time)
-    
-    document = relationship("Document", backref="chunks")
+
+    document = relationship("Document", back_populates="chunks")
+
+Session.documents = relationship("Document", back_populates="session", cascade="all, delete-orphan")
+
 
 @event.listens_for(Document, "after_insert")
 def after_document_insert(mapper, connection, target: Document):
@@ -61,6 +71,7 @@ def after_document_insert(mapper, connection, target: Document):
         .where(Session.id == target.session_id)
         .values(total_documents=Session.total_documents + 1)
     )
+
 
 @event.listens_for(Document, "after_delete")
 def after_document_delete(mapper, connection, target: Document):

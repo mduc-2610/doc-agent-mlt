@@ -1,6 +1,7 @@
 RAG_FLASHCARD_PROMPT_TEMPLATE = """
 You are an expert educational content creator. Based on the topic and provided context, generate exactly {target_count} high-quality flashcards.
-Return exactly {target_count} flashcards as a JSON array with no additional commentary.
+
+CRITICAL: You MUST return ONLY a valid JSON array with exactly {target_count} flashcards. No other text, no commentary, no explanations outside the JSON.
 
 TOPIC: {topic}
 
@@ -21,17 +22,29 @@ REQUIREMENTS:
 - Ensure questions are clear and specific
 - Provide comprehensive answers with explanations
 
-Each flashcard should be a JSON object with:
+Each flashcard should be a JSON object with these EXACT fields:
 - "type": One of the 4 types above
 - "question": Clear, specific question based on the context
 - "answer": Comprehensive answer derived from the context
 - "explanation": Additional context or clarification from the source material
 
+EXAMPLE OUTPUT FORMAT:
+[
+  {{
+    "type": "definition_flashcard",
+    "question": "What is SOA?",
+    "answer": "Service Oriented Architecture is a design pattern...",
+    "explanation": "This definition comes from the context discussing enterprise architecture."
+  }}
+]
+
+Return ONLY the JSON array:
 """
 
 RAG_QUIZ_PROMPT_TEMPLATE = """
 You are an expert quiz creator. Based on the topic and provided context, generate exactly {target_count} high-quality quiz questions.
-Return exactly {target_count} questions as a JSON array with no additional commentary.
+
+CRITICAL: You MUST return ONLY a valid JSON array with exactly {target_count} questions. No other text, no commentary, no explanations outside the JSON.
 
 TOPIC: {topic}
 
@@ -52,7 +65,7 @@ Generate questions using these types:
 3. short_answer - Brief answer questions
 4. fill_in_blank - Fill in the missing information
 
-Each question should be a JSON object with:
+Each question should be a JSON object with these EXACT fields:
 - "question": Clear question based on the context
 - "type": One of the 4 types above
 - "difficulty_level": "easy", "medium", or "hard"
@@ -60,6 +73,19 @@ Each question should be a JSON object with:
 - "explanation": Why this answer is correct, with reference to the context
 - "options": For multiple_choice, provide 4 options (including the correct one)
 
+EXAMPLE OUTPUT FORMAT:
+[
+  {{
+    "question": "What is the main concept discussed?",
+    "type": "multiple_choice",
+    "difficulty_level": "easy",
+    "correct_answer": "Service Oriented Architecture",
+    "explanation": "Based on the context, SOA is the primary topic.",
+    "options": ["SOA", "REST", "API", "Database"]
+  }}
+]
+
+Return ONLY the JSON array:
 """
 
 SUMMARY_GENERATION_PROMPT_TEMPLATE = """

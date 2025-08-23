@@ -42,6 +42,7 @@ class TutorAgent:
                     "X-Title": "RAG Tutor",
                 },
                 max_tokens=max_tokens,
+                response_format={"type": "json_object"},
                 timeout=self.generation_timeout,
             )
             text = completion.choices[0].message.content

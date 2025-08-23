@@ -24,7 +24,6 @@ class SimpleCache:
     
     def set(self, key: str, value):
         if len(self.cache) >= self.max_size:
-            # Remove oldest item (simple FIFO)
             self.cache.pop(next(iter(self.cache)))
         self.cache[key] = value
     
@@ -85,11 +84,9 @@ class VectorProcessor:
             raise
     
     def chunk_and_embed_document(self, db: Session, document_id: str, text_content: str) -> List[DocumentChunk]:
-        """Create chunks and embeddings for a document"""
         try:
             logger.info(f"Processing document {document_id} with {len(text_content)} characters")
             
-            # Check if chunks already exist
             existing_chunks = db.query(DocumentChunk).filter(
                 DocumentChunk.document_id == document_id
             ).first()
@@ -158,16 +155,13 @@ class VectorProcessor:
     
     def similarity_search(self, db: Session, query: str, document_ids: List[str] = None, 
                          top_k: int = 10) -> List[Dict[str, Any]]:
-        """Perform similarity search using cosine similarity"""
         try:
             if not query.strip():
                 logger.warning("Empty query provided")
                 return []
             
-            # Create query embedding
             query_embedding = self.create_embeddings([query])[0]
             
-            # Build similarity query
             similarity_query = """
                 SELECT 
                     id,
@@ -217,12 +211,10 @@ class VectorProcessor:
     
     def get_relevant_context(self, db: Session, topic: str, document_ids: List[str] = None, 
                            max_context_length: int = None) -> str:
-        """Get relevant context for a topic"""
         try:
             if max_context_length is None:
                 max_context_length = settings.rag.max_context_length
             
-            # Use similarity search
             search_results = self.similarity_search(
                 db, topic, document_ids, top_k=settings.rag.retrieval_top_k
             )
@@ -231,7 +223,6 @@ class VectorProcessor:
                 logger.warning(f"No relevant context found for topic: {topic}")
                 return ""
             
-            # Aggregate context
             context_parts = []
             current_length = 0
             
@@ -243,7 +234,6 @@ class VectorProcessor:
                     context_parts.append(content)
                     current_length += content_length
                 else:
-                    # Try to fit truncated version
                     remaining_space = max_context_length - current_length
                     if remaining_space > 100:
                         truncated = content[:remaining_space - 3] + "..."
@@ -260,7 +250,6 @@ class VectorProcessor:
             return ""
     
     def get_cache_stats(self) -> Dict[str, Any]:
-        """Get cache statistics"""
         return {
             "cache_size": len(self.embedding_cache.cache),
             "max_cache_size": self.embedding_cache.max_size,
@@ -268,7 +257,6 @@ class VectorProcessor:
         }
     
     def cleanup_cache(self) -> int:
-        """Clear cache and return number of entries cleared"""
         cache_size = len(self.embedding_cache.cache)
         self.embedding_cache.clear()
         logger.info(f"Cleared {cache_size} cached embeddings")

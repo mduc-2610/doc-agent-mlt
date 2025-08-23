@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, DateTime
+from sqlalchemy import Column, String, Text, DateTime, Integer
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 from app.config import current_date_time
@@ -13,5 +13,4 @@ class Session(Base):
     description = Column(Text)
     created_at = Column(DateTime, default=current_date_time)
     updated_at = Column(DateTime, default=current_date_time, onupdate=current_date_time)
-
-    
+    total_documents = Column(Integer, default=0) 
