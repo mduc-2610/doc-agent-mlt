@@ -1,6 +1,5 @@
 from .document import *
 from .question import *
-from .tutor import *
 
 __all__ = [
     "SessionResponse", "DocumentResponse", "SessionDetailResponse",
@@ -9,5 +8,4 @@ __all__ = [
     "QuestionAnswerResponse", "QuestionResponse", "DocumentUploadBase",
     "DocumentFileUploadRequest", "DocumentUrlUploadRequest",
     "QuestionGenerationRequest", "ReviewRequest",
-    "TutorChatRequest", "TutorChatResponse", "TutorExplainRequest", "TutorExplainResponse"
 ]
