@@ -159,4 +159,159 @@ class QuestionService:
             logger.error(f"Failed to insert question answers: {e}")
             raise
 
+    def update_question(self, db: Session, question_id: str, update_data: dict) -> Question:
+        """Update a question and its answers"""
+        try:
+            question = db.query(Question).filter(Question.id == question_id).first()
+            if not question:
+                raise HTTPException(status_code=404, detail="Question not found")
+            
+            # Update question fields
+            for field, value in update_data.items():
+                if field != 'question_answers' and hasattr(question, field):
+                    setattr(question, field, value)
+            
+            # Update question answers if provided
+            if 'question_answers' in update_data:
+                # Delete existing answers
+                db.query(QuestionAnswer).filter(QuestionAnswer.question_id == question_id).delete()
+                
+                # Add new answers
+                for answer_data in update_data['question_answers']:
+                    new_answer = QuestionAnswer(
+                        id=str(uuid.uuid4()),
+                        content=answer_data['content'],
+                        is_correct=answer_data.get('is_correct', False),
+                        explanation=answer_data.get('explanation'),
+                        question_id=question_id
+                    )
+                    db.add(new_answer)
+            
+            db.commit()
+            db.refresh(question)
+            return question
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to update question {question_id}: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    def update_flashcard(self, db: Session, flashcard_id: str, update_data: dict) -> Flashcard:
+        """Update a flashcard"""
+        try:
+            flashcard = db.query(Flashcard).filter(Flashcard.id == flashcard_id).first()
+            if not flashcard:
+                raise HTTPException(status_code=404, detail="Flashcard not found")
+            
+            # Update flashcard fields
+            for field, value in update_data.items():
+                if hasattr(flashcard, field):
+                    setattr(flashcard, field, value)
+            
+            db.commit()
+            db.refresh(flashcard)
+            return flashcard
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to update flashcard {flashcard_id}: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    def delete_question(self, db: Session, question_id: str) -> bool:
+        """Delete a question and its answers"""
+        try:
+            question = db.query(Question).filter(Question.id == question_id).first()
+            if not question:
+                raise HTTPException(status_code=404, detail="Question not found")
+            
+            db.delete(question)
+            db.commit()
+            return True
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to delete question {question_id}: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    def delete_flashcard(self, db: Session, flashcard_id: str) -> bool:
+        """Delete a flashcard"""
+        try:
+            flashcard = db.query(Flashcard).filter(Flashcard.id == flashcard_id).first()
+            if not flashcard:
+                raise HTTPException(status_code=404, detail="Flashcard not found")
+            
+            db.delete(flashcard)
+            db.commit()
+            return True
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to delete flashcard {flashcard_id}: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    def create_question(self, db: Session, question_data: dict) -> Question:
+        """Create a new question"""
+        try:
+            question = Question(
+                id=str(uuid.uuid4()),
+                content=question_data['content'],
+                type=question_data['type'],
+                correct_answer=question_data['correct_answer'],
+                explanation=question_data.get('explanation'),
+                topic=question_data.get('topic'),
+                difficulty_level=question_data.get('difficulty_level'),
+                session_id=question_data['session_id'],
+                user_id=question_data['user_id'],
+                created_at=current_date_time()
+            )
+            
+            db.add(question)
+            db.flush()  # To get the ID
+            
+            # Add question answers if provided
+            if 'question_answers' in question_data and question_data['question_answers']:
+                for answer_data in question_data['question_answers']:
+                    answer = QuestionAnswer(
+                        id=str(uuid.uuid4()),
+                        content=answer_data['content'],
+                        is_correct=answer_data.get('is_correct', False),
+                        explanation=answer_data.get('explanation'),
+                        question_id=question.id
+                    )
+                    db.add(answer)
+            
+            db.commit()
+            db.refresh(question)
+            return question
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to create question: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    def create_flashcard(self, db: Session, flashcard_data: dict) -> Flashcard:
+        """Create a new flashcard"""
+        try:
+            flashcard = Flashcard(
+                id=str(uuid.uuid4()),
+                question=flashcard_data['question'],
+                answer=flashcard_data['answer'],
+                card_type=flashcard_data['card_type'],
+                explanation=flashcard_data.get('explanation'),
+                topic=flashcard_data.get('topic'),
+                session_id=flashcard_data['session_id'],
+                user_id=flashcard_data['user_id'],
+                created_at=current_date_time()
+            )
+            
+            db.add(flashcard)
+            db.commit()
+            db.refresh(flashcard)
+            return flashcard
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to create flashcard: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
 question_service = QuestionService()

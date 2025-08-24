@@ -9,7 +9,7 @@ class SessionResponse(BaseModel):
     user_id: str
     name: str
     description: str | None
-    document_count: int = 0
+    total_documents: int
     created_at: datetime
     updated_at: datetime
 
@@ -33,6 +33,21 @@ class DocumentResponse(BaseModel):
         from_attributes = True
 
 
+class DocumentSummaryResponse(BaseModel):
+    id: uuid.UUID
+    document_id: uuid.UUID
+    summary_content: str
+    document_count: int
+    total_word_count: int
+    summary_word_count: int
+    summary_file_path: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class SessionDetailResponse(SessionResponse):
     pass
 class SessionCreateRequest(BaseModel):
@@ -40,10 +55,6 @@ class SessionCreateRequest(BaseModel):
     name: str
     description: Optional[str] = ""
 
-
-class SessionUpdateRequest(BaseModel):
-    name: str
-    description: Optional[str] = ""
 
 class SessionUpdateRequest(BaseModel):
     name: Optional[str] = None

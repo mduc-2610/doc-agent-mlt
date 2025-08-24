@@ -62,8 +62,7 @@ REQUIREMENTS:
 Generate questions using these types:
 1. multiple_choice - Multiple choice with 4 options
 2. true_false - True/false questions
-3. short_answer - Brief answer questions
-4. fill_in_blank - Fill in the missing information
+3. fill_in_blank - Fill in the missing information
 
 Each question should be a JSON object with these EXACT fields:
 - "question": Clear question based on the context
@@ -88,11 +87,31 @@ EXAMPLE OUTPUT FORMAT:
 Return ONLY the JSON array:
 """
 
-SUMMARY_GENERATION_PROMPT_TEMPLATE = """
-You are an expert educational content summarizer. Create a comprehensive study summary for the session "{session_name}" based on the provided documents.
+STANDARD_OUTPUT_FORMAT_REQUIREMENTS = """
+OUTPUT FORMAT REQUIREMENTS:
+- Use standard Markdown formatting for consistency
+- Structure with clear headings (# ## ### for hierarchy)
+- Use bullet points (-) or numbered lists (1. 2. 3.) for itemized content
+- Use **bold** for key terms and important concepts
+- Use *italic* for emphasis or secondary information
+- Use `inline code` for technical terms, commands, or specific values
+- Use code blocks with language specification for examples:
+  ```language
+  code example here
+  ```
+- Use tables when presenting comparative data or structured information:
+  | Header 1 | Header 2 | Header 3 |
+  |----------|----------|----------|
+  | Data 1   | Data 2   | Data 3   |
+- Use > blockquotes for important notes or key takeaways
+- Ensure proper spacing between sections for readability
+"""
 
-DOCUMENT CONTENT ({document_count} documents):
-{content}
+SUMMARY_GENERATION_PROMPT_TEMPLATE = f"""
+You are an expert educational content summarizer. Create a comprehensive study summary for the session "{{session_name}}" based on the provided documents.
+
+DOCUMENT CONTENT ({{document_count}} documents):
+{{content}}
 
 Generate a well-structured summary that includes:
 - Key terms and definitions
@@ -109,68 +128,9 @@ REQUIREMENTS:
 - Detect the language of the content automatically and write the summary in the same language
 - Ensure the summary is comprehensive yet concise (aim for 800-1200 words)
 
+{STANDARD_OUTPUT_FORMAT_REQUIREMENTS}
+
 Write a study-focused summary that would help someone prepare for an exam on this material:
-"""
-
-ANSWER_GENERATION_PROMPT_TEMPLATE = """
-Based on the following question and context, generate a comprehensive correct answer with explanation.
-
-QUESTION: {question}
-CONTEXT: {context}
-
-Provide a JSON object with:
-- "answer": The correct answer based on the context
-- "explanation": Detailed explanation of why this is correct, referencing the context
-- "source_reference": Brief reference to which part of the context supports this answer
-
-Ensure the answer is directly supported by the provided context.
-"""
-
-INCORRECT_ANSWER_PROMPT_TEMPLATE = """
-Generate a brief explanation for why this answer is incorrect in the given context.
-
-INCORRECT ANSWER: {incorrect_answer}
-CORRECT ANSWER: {correct_answer}
-CONTEXT: {context}
-
-Provide a concise explanation (1-2 sentences) of why the incorrect answer is wrong and why the correct answer is right based on the context.
-"""
-
-QUALITY_VALIDATION_PROMPT_TEMPLATE = """
-Evaluate the quality of this quiz question based on the provided context.
-
-QUESTION: {question}
-ANSWER: {answer}
-EXPLANATION: {explanation}
-CONTEXT: {context}
-
-Rate the question on a scale of 1-10 considering:
-1. Clarity and specificity of the question
-2. Accuracy of the answer based on context
-3. Quality of explanation
-4. Relevance to the context
-5. Educational value
-
-Provide a JSON object with:
-- "score": Number from 1-10
-- "feedback": Brief explanation of the score
-- "suggestions": Any improvements needed
-"""
-
-CONTEXT_RELEVANCE_PROMPT_TEMPLATE = """
-Analyze how well this generated content relates to the source context.
-
-GENERATED CONTENT:
-Question: {question}
-Answer: {answer}
-
-SOURCE CONTEXT:
-{context}
-
-Provide a JSON object with:
-- "relevance_score": Number from 0-1 (0 = not relevant, 1 = highly relevant)
-- "key_concepts_matched": List of key concepts from context that appear in the question/answer
-- "missing_context": Important context information not reflected in the generated content
 """
 
 TUTOR_SYSTEM_PROMPT = (
@@ -197,3 +157,41 @@ TUTOR_USER_PROMPT_TEMPLATE = (
 "Respond ONLY as valid minified JSON with keys: \n"
 "{{'reply': str, 'citations': [{{'tag': str, 'doc_id': str, 'filename': str}}], 'next_suggestions': [str]}}\n"
 )
+
+TUTOR_EXPLANATION_PROMPT_TEMPLATE = f"""
+You are an AI tutor. Explain the concept "{{concept}}" in a {{difficulty_level}} level and {{learning_style}} style.
+
+Context from documents:
+{{context}}
+
+Provide a clear, engaging explanation that:
+1. Defines the concept clearly
+2. Gives practical examples
+3. Relates to the provided context when relevant
+4. Uses appropriate language for {{difficulty_level}} level
+
+{STANDARD_OUTPUT_FORMAT_REQUIREMENTS}
+
+Explanation:
+"""
+
+TUTOR_ANSWER_PROMPT_TEMPLATE = f"""
+You are an AI tutor. Answer the following question clearly and helpfully.
+
+Question: {{question}}
+
+Context from documents:
+{{context}}
+
+{{context_hint}}
+
+Provide a comprehensive answer that:
+1. Directly addresses the question
+2. Uses information from the context when relevant
+3. Provides additional insights if helpful
+4. Suggests follow-up learning if appropriate
+
+{STANDARD_OUTPUT_FORMAT_REQUIREMENTS}
+
+Answer:
+"""

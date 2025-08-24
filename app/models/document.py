@@ -62,21 +62,3 @@ class DocumentChunk(Base):
     document = relationship("Document", back_populates="chunks")
 
 Session.documents = relationship("Document", back_populates="session", cascade="all, delete-orphan")
-
-
-@event.listens_for(Document, "after_insert")
-def after_document_insert(mapper, connection, target: Document):
-    connection.execute(
-        Session.__table__.update()
-        .where(Session.id == target.session_id)
-        .values(total_documents=Session.total_documents + 1)
-    )
-
-
-@event.listens_for(Document, "after_delete")
-def after_document_delete(mapper, connection, target: Document):
-    connection.execute(
-        Session.__table__.update()
-        .where(Session.id == target.session_id)
-        .values(total_documents=Session.total_documents - 1)
-    )

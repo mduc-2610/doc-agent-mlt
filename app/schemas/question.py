@@ -79,3 +79,39 @@ class ReviewRequest(BaseModel):
     action: str
     selected_question_ids: Optional[List[str]] = None
     reviewer_notes: Optional[str] = None
+
+class QuestionUpdateRequest(BaseModel):
+    content: str
+    type: str
+    correct_answer: str
+    explanation: Optional[str] = None
+    topic: Optional[str] = None
+    difficulty_level: Optional[str] = None
+    question_answers: Optional[List[dict]] = None
+
+class FlashcardUpdateRequest(BaseModel):
+    question: str
+    answer: str
+    card_type: str
+    explanation: Optional[str] = None
+    topic: Optional[str] = None
+
+class QuestionCreateRequest(BaseModel):
+    content: str
+    type: str
+    correct_answer: str
+    explanation: Optional[str] = None
+    topic: Optional[str] = None
+    difficulty_level: Optional[str] = None
+    session_id: str
+    user_id: str
+    question_answers: Optional[List[dict]] = None
+
+class FlashcardCreateRequest(BaseModel):
+    question: str
+    answer: str
+    card_type: str
+    explanation: Optional[str] = None
+    topic: Optional[str] = None
+    session_id: str
+    user_id: str

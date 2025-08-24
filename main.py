@@ -9,6 +9,8 @@ from app.database import init_db, get_db
 from app.api import (
     document_routes, 
     question_routes,
+    tutor_routes,
+    summary_routes,
 )
 from app.config import settings
 from app.processors.vector_processor import vector_processor
@@ -70,6 +72,8 @@ app.add_middleware(
 )
 app.include_router(document_routes.router, prefix="/document", tags=["Document Processing"])
 app.include_router(question_routes.router, prefix="/question", tags=["Quiz & Flashcard Generation"])
+app.include_router(tutor_routes.router, prefix="/tutor", tags=["AI Tutor & Learning"])
+app.include_router(summary_routes.router, prefix="/summary", tags=["Document Summary"])
 
 @app.get("/health")
 async def health_check():

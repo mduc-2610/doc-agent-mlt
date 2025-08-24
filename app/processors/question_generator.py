@@ -73,6 +73,10 @@ class QuestionGenerator:
             else:
                 raise
     
+    def _generate_content(self, prompt: str, content_type: str = "general") -> str:
+        """Generate content using AI - wrapper for tutor service compatibility"""
+        return self._make_api_call(prompt)
+    
     def _validate_and_parse(self, prompt: str, validator_class, target_count: int) -> List[Dict]:
         for attempt in range(self.max_retries):
             try:

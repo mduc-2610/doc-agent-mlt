@@ -4,12 +4,13 @@ import traceback
 import logging
 from typing import Optional, List
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 from fastapi import HTTPException
 from app.models import Document, Session as SessionModel, Question, Flashcard
 from app.processors.content_processor import content_processor
 from app.processors.vector_processor import vector_processor
 from app.config import settings, current_date_time
-from app.schemas.document import FileParseRequest, SessionCreateRequest, UrlParseRequest
+from app.schemas.document import FileParseRequest, SessionCreateRequest, SessionUpdateRequest, UrlParseRequest
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ class DocumentService:
     def get_user_sessions(self, db: Session, user_id: str):
         return db.query(SessionModel).filter(SessionModel.user_id == user_id).all()
 
-    def update_session(self, db: Session, session_id: str, request: SessionCreateRequest):
+    def update_session(self, db: Session, session_id: str, request: SessionUpdateRequest):
         try:
             session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
             if not session:
@@ -89,9 +90,13 @@ class DocumentService:
 
     def get_documents(self, db: Session):
         return db.query(Document).all()
-
     def get_documents_by_session(self, db: Session, session_id: str):
-        return db.query(Document).filter(Document.session_id == session_id).all()
+        return db.query(Document).filter(
+            and_(
+                Document.session_id == session_id,
+                Document.processing_status == "completed"
+            )
+        ).all()
 
     def parse_document(self, db: Session, request: FileParseRequest) -> Document:
         allowed_types = {
@@ -143,10 +148,12 @@ class DocumentService:
                 chunks = self.vector_processor.chunk_and_embed_document(db, document_id, raw_text)
                 document.processing_status = "completed"
                 db.commit()
+                self._increment_session_documents(db, request.session_id)
                 logger.info(f"Created {len(chunks)} chunks for document {document_id}")
             except Exception as e:
                 logger.error(f"Embedding failed for {document_id}: {e}")
                 self._delete_document(db, document)
+                self._decrement_session_documents(db, request.session_id)
                 raise HTTPException(status_code=500, detail="Embedding failed")
 
             return document
@@ -205,10 +212,12 @@ class DocumentService:
                 chunks = self.vector_processor.chunk_and_embed_document(db, document_id, raw_text)
                 document.processing_status = "completed"
                 db.commit()
+                self._increment_session_documents(db, request.session_id)
                 logger.info(f"Created {len(chunks)} chunks for audio/video document {document_id}")
             except Exception as e:
                 logger.error(f"Embedding failed for {document_id}: {e}")
                 self._delete_document(db, document)
+                self._decrement_session_documents(db, request.session_id)
                 raise HTTPException(status_code=500, detail="Embedding failed")
 
             return document
@@ -253,10 +262,12 @@ class DocumentService:
                 chunks = self.vector_processor.chunk_and_embed_document(db, document_id, raw_text)
                 document.processing_status = "completed"
                 db.commit()
+                self._increment_session_documents(db, request.session_id)
                 logger.info(f"Created {len(chunks)} chunks for web document {document_id}")
             except Exception as e:
                 logger.error(f"Embedding failed for {document_id}: {e}")
                 self._delete_document(db, document)
+                self._decrement_session_documents(db, request.session_id)
                 raise HTTPException(status_code=500, detail="Embedding failed")
 
             return document
@@ -296,10 +307,12 @@ class DocumentService:
                 chunks = self.vector_processor.chunk_and_embed_document(db, document_id, raw_text)
                 document.processing_status = "completed"
                 db.commit()
+                self._increment_session_documents(db, request.session_id)
                 logger.info(f"Created {len(chunks)} chunks for YouTube document {document_id}")
             except Exception as e:
                 logger.error(f"Embedding failed for {document_id}: {e}")
                 self._delete_document(db, document)
+                self._decrement_session_documents(db, request.session_id)
                 raise HTTPException(status_code=500, detail="Embedding failed")
 
             return document
@@ -343,5 +356,23 @@ class DocumentService:
                 os.rmdir(audio_dir)
         except Exception as e:
             logger.warning(f"Failed to cleanup audio directory: {e}")
+
+    def _increment_session_documents(self, db: Session, session_id: str):
+        try:
+            session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+            if session:
+                session.total_documents += 1
+                db.commit()
+        except Exception as e:
+            logger.error(f"Failed to increment total_documents for session {session_id}: {e}")
+
+    def _decrement_session_documents(self, db: Session, session_id: str):
+        try:
+            session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+            if session and session.total_documents > 0:
+                session.total_documents -= 1
+                db.commit()
+        except Exception as e:
+            logger.error(f"Failed to decrement total_documents for session {session_id}: {e}")
 
 document_service = DocumentService()
