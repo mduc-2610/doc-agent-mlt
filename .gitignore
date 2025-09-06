@@ -1,0 +1,6 @@
+**/__pycache__
+.env
+**/.env
+**/local_fs
+**/content_generator_response.txt
+**/suggest_model.txt
